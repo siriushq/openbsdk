@@ -1,0 +1,56 @@
+on:
+  # twice a day at 6am and 6pm UTC
+  schedule:
+    - cron: "0 6,18 * * *"
+  # manual dispatch
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: fetch upstream /openbsd/src
+        run: |
+          echo "First run: cloning full OpenBSD src"
+          git clone --mirror https://github.com/openbsd/src.git openbsd-src
+      - name: filter /openbsd/src/sys/ to repository root
+        run: |
+          pip install git-filter-repo
+          rm -rf filtered
+          git clone openbsd-src filtered
+          cd filtered
+          git filter-repo --path sys/ --path-rename sys/: --path .github/workflows/mirror.yml --force
+      - name: configure identity for git
+        run: |
+
+      - name: configure identity for git, and restore license and workflow file to master
+        run: |
+          git config --global user.name "siriushq-aggregate[bot]"
+          git config --global user.email "siriushq-aggregate[bot]@users.noreply.github.com"
+
+          cp license filtered/license
+          mkdir -p filtered/.github/workflows/
+          cp .github/workflows/mirror.yml filtered/.github/workflows/mirror.yml
+
+          cd filtered
+          git add license .github/workflows/mirror.yml
+          git commit -m $'restore workflow and license
+          
+          Co-authored-by: Mahied Maruf <contact@mechite.com>
+          Co-authored-by: Enzo van der Tuin <55853439+JegoxMC@users.noreply.github.com>
+          Co-authored-by: Maurice Norden <mauricenorden@gmail.com>
+          Signed-off-by: siriushq-aggregate <siriushq-aggregate[bot]@users.noreply.github.com>'
+          cd ..
+      - name: force push to master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd filtered
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}"
+          git push origin HEAD:master --force
