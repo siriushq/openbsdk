@@ -1,4 +1,4 @@
-/*	$OpenBSD: trap.c,v 1.21 2026/03/08 17:07:31 deraadt Exp $	*/
+/*	$OpenBSD: trap.c,v 1.22 2026/04/05 22:13:21 kettenis Exp $	*/
 
 /*
  * Copyright (c) 2020 Shivam Waghela <shivamwaghela@gmail.com>
@@ -176,10 +176,11 @@ accesstype(struct trapframe *frame)
 {
 	vm_prot_t access_type;
 
-	if ((frame->tf_scause == EXCP_FAULT_STORE) ||
-	    (frame->tf_scause == EXCP_STORE_PAGE_FAULT)) {
+	if (frame->tf_scause == EXCP_FAULT_STORE ||
+	    frame->tf_scause == EXCP_STORE_PAGE_FAULT) {
 		access_type = PROT_WRITE;
-	} else if (frame->tf_scause == EXCP_INST_PAGE_FAULT) {
+	} else if (frame->tf_scause == EXCP_FAULT_FETCH ||
+	    frame->tf_scause == EXCP_INST_PAGE_FAULT) {
 		access_type = PROT_EXEC;
 	} else {
 		access_type = PROT_READ;
