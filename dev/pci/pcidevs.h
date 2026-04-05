@@ -2,7 +2,7 @@
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	OpenBSD: pcidevs,v 1.2131 2026/04/04 08:58:26 jsg Exp 
+ *	OpenBSD: pcidevs,v 1.2132 2026/04/05 22:06:19 kettenis Exp 
  */
 /*	$NetBSD: pcidevs,v 1.30 1997/06/24 06:20:24 thorpej Exp $	*/
 
@@ -365,6 +365,7 @@
 #define	PCI_VENDOR_QUECTEL	0x1eac		/* Quectel */
 #define	PCI_VENDOR_TEHUTI	0x1fc9		/* Tehuti Networks */
 #define	PCI_VENDOR_SUNIX2	0x1fd4		/* Sunix */
+#define	PCI_VENDOR_SPACEMIT	0x201f		/* SpacemiT */
 #define	PCI_VENDOR_KINGSTON	0x2646		/* Kingston */
 #define	PCI_VENDOR_HINT	0x3388		/* Hint */
 #define	PCI_VENDOR_3DLABS	0x3d3d		/* 3D Labs */
@@ -9646,6 +9647,9 @@
 #define	PCI_PRODUCT_SONY_CXD3222	0x8039		/* CXD3222 FireWire */
 #define	PCI_PRODUCT_SONY_MEMSTICK_SLOT	0x808a		/* Memory Stick Slot */
 #define	PCI_PRODUCT_SONY_RS780	0x9602		/* RS780 */
+
+/* SpacemiT products */
+#define	PCI_PRODUCT_SPACEMIT_K1	0x0001		/* K1 */
 
 /* Solid State Storage Technology Corporation products */
 #define	PCI_PRODUCT_SSSTC_CL1	0x9100		/* CL1 */

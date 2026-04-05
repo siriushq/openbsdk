@@ -2,7 +2,7 @@
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	OpenBSD: pcidevs,v 1.2131 2026/04/04 08:58:26 jsg Exp 
+ *	OpenBSD: pcidevs,v 1.2132 2026/04/05 22:06:19 kettenis Exp 
  */
 
 /*	$NetBSD: pcidevs,v 1.30 1997/06/24 06:20:24 thorpej Exp $	*/
@@ -34884,6 +34884,10 @@ static const struct pci_known_product pci_known_products[] = {
 	    "RS780",
 	},
 	{
+	    PCI_VENDOR_SPACEMIT, PCI_PRODUCT_SPACEMIT_K1,
+	    "K1",
+	},
+	{
 	    PCI_VENDOR_SSSTC, PCI_PRODUCT_SSSTC_CL1,
 	    "CL1",
 	},
@@ -39190,6 +39194,10 @@ static const struct pci_known_vendor pci_known_vendors[] = {
 	{
 	    PCI_VENDOR_SUNIX2,
 	    "Sunix",
+	},
+	{
+	    PCI_VENDOR_SPACEMIT,
+	    "SpacemiT",
 	},
 	{
 	    PCI_VENDOR_KINGSTON,
