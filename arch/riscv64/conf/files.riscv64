@@ -1,4 +1,4 @@
-#	$OpenBSD: files.riscv64,v 1.33 2026/04/05 11:40:50 kettenis Exp $
+#	$OpenBSD: files.riscv64,v 1.34 2026/04/05 18:08:11 kettenis Exp $
 
 # Standard stanzas config(8) can't run without
 maxpartitions 16
@@ -129,6 +129,11 @@ file	arch/riscv64/dev/sgmsi.c		sgmsi
 device	smtclock
 attach	smtclock at fdt
 file	arch/riscv64/dev/smtclock.c		smtclock
+
+# SpacemiT PCIe/USB combo PHY
+device	smtcomphy
+attach	smtcomphy at fdt
+file	arch/riscv64/dev/smtcomphy.c		smtcomphy
 
 # SpacemiT GPIO controller
 device	smtgpio
