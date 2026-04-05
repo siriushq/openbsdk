@@ -1,4 +1,4 @@
-$OpenBSD: pcidevs,v 1.2131 2026/04/04 08:58:26 jsg Exp $
+$OpenBSD: pcidevs,v 1.2132 2026/04/05 22:06:19 kettenis Exp $
 /*	$NetBSD: pcidevs,v 1.30 1997/06/24 06:20:24 thorpej Exp $	*/
 
 /*
@@ -360,6 +360,7 @@ vendor	SSSTC		0x1e95	SSSTC
 vendor	QUECTEL		0x1eac	Quectel
 vendor	TEHUTI		0x1fc9	Tehuti Networks
 vendor	SUNIX2		0x1fd4	Sunix
+vendor	SPACEMIT	0x201f	SpacemiT
 vendor	KINGSTON	0x2646	Kingston
 vendor	HINT		0x3388	Hint
 vendor	3DLABS		0x3d3d	3D Labs
@@ -9641,6 +9642,9 @@ product SONY CXD1947A		0x8009	CXD1947A FireWire
 product SONY CXD3222		0x8039	CXD3222 FireWire
 product SONY MEMSTICK_SLOT	0x808a	Memory Stick Slot
 product SONY RS780		0x9602	RS780
+
+/* SpacemiT products */
+product SPACEMIT K1		0x0001	K1
 
 /* Solid State Storage Technology Corporation products */
 product SSSTC CL1		0x9100	CL1
