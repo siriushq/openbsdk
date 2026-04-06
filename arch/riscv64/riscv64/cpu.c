@@ -1,4 +1,4 @@
-/*	$OpenBSD: cpu.c,v 1.25 2026/04/05 11:48:17 kettenis Exp $	*/
+/*	$OpenBSD: cpu.c,v 1.26 2026/04/06 08:13:22 jca Exp $	*/
 
 /*
  * Copyright (c) 2016 Dale Rahn <drahn@dalerahn.com>
@@ -40,9 +40,9 @@
 #include <dev/ofw/fdt.h>
 
 /* CPU Identification */
+#define CPU_VENDOR_MIPS		0x029
 #define CPU_VENDOR_ANDES	0x31e
 #define CPU_VENDOR_SIFIVE	0x489
-#define CPU_VENDOR_MIPS		0x029
 #define CPU_VENDOR_THEAD	0x5b7
 #define CPU_VENDOR_SPACEMIT	0x710
 
