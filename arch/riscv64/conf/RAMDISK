@@ -1,4 +1,4 @@
-#	$OpenBSD: RAMDISK,v 1.51 2026/04/05 18:08:11 kettenis Exp $
+#	$OpenBSD: RAMDISK,v 1.52 2026/04/06 10:30:27 kettenis Exp $
 
 machine		riscv64
 maxusers	4
@@ -67,6 +67,8 @@ sfuart*		at fdt?
 smtclock*	at fdt? early 1
 smtcomphy*	at fdt?
 smtgpio*	at fdt?
+smtiic*		at fdt?
+iic*		at smtiic?
 
 # StarFive SoCs
 stfclock*	at fdt? early 1

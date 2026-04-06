@@ -1,4 +1,4 @@
-/*	$OpenBSD: smtclock.c,v 1.1 2026/04/05 11:40:50 kettenis Exp $	*/
+/*	$OpenBSD: smtclock.c,v 1.2 2026/04/06 10:30:27 kettenis Exp $	*/
 /*
  * Copyright (c) 2026 Mark Kettenis <kettenis@openbsd.org>
  *
@@ -37,6 +37,22 @@
 #define K1_CLK_UART7		6
 #define K1_CLK_UART8		7
 #define K1_CLK_UART9		8
+#define K1_CLK_TWSI0		32
+#define K1_CLK_TWSI1		33
+#define K1_CLK_TWSI2		34
+#define K1_CLK_TWSI4		35
+#define K1_CLK_TWSI5		36
+#define K1_CLK_TWSI6		37
+#define K1_CLK_TWSI7		38
+#define K1_CLK_TWSI8		39
+#define K1_CLK_TWSI0_BUS	84
+#define K1_CLK_TWSI1_BUS	85
+#define K1_CLK_TWSI2_BUS	86
+#define K1_CLK_TWSI4_BUS	87
+#define K1_CLK_TWSI5_BUS	88
+#define K1_CLK_TWSI6_BUS	89
+#define K1_CLK_TWSI7_BUS	90
+#define K1_CLK_TWSI8_BUS	91
 
 /* APMU resets */
 #define K1_RESET_UART0		0
@@ -48,6 +64,14 @@
 #define K1_RESET_UART7		6
 #define K1_RESET_UART8		7
 #define K1_RESET_UART9		8
+#define K1_RESET_TWSI0		32
+#define K1_RESET_TWSI1		33
+#define K1_RESET_TWSI2		34
+#define K1_RESET_TWSI4		35
+#define K1_RESET_TWSI5		36
+#define K1_RESET_TWSI6		37
+#define K1_RESET_TWSI7		38
+#define K1_RESET_TWSI8		39
 
 /* APMU clocks */
 #define K1_CLK_USB30		16
@@ -63,11 +87,24 @@
 #define K1_RESET_PCIE0_SLAVE	24
 #define K1_RESET_PCIE0_DBI	25
 #define K1_RESET_PCIE0_GLOBAL	26
+#define K1_RESET_PCIE1_GLOBAL	30
+#define K1_RESET_PCIE2_GLOBAL	34
 
 /* APBC registers */
 #define APBC_UART1_CLK_RST		0x0000
 #define APBC_UART2_CLK_RST		0x0004
+#define APBC_TWSI8_CLK_RST		0x0020
+#define  APBC_TWSI8_CLK_RST_RST		(1U << 2)
+#define  APBC_TWSI8_CLK_RST_FNCLK	(1U << 1)
+#define  APBC_TWSI8_CLK_RST_APBCLK	(1U << 0)
 #define APBC_UART3_CLK_RST		0x0024
+#define APBC_TWSI0_CLK_RST		0x002c
+#define APBC_TWSI1_CLK_RST		0x0030
+#define APBC_TWSI2_CLK_RST		0x0038
+#define APBC_TWSI4_CLK_RST		0x0040
+#define APBC_TWSI5_CLK_RST		0x004c
+#define APBC_TWSI6_CLK_RST		0x0060
+#define APBC_TWSI7_CLK_RST		0x0068
 #define APBC_UART4_CLK_RST		0x0070
 #define APBC_UART5_CLK_RST		0x0074
 #define APBC_UART6_CLK_RST		0x0078
@@ -79,6 +116,8 @@
 /* APMU registers */
 #define APMU_USB_CLK_RES_CTRL		0x005c
 #define APMU_PCIE_CLK_RES_CTRL_PORTA	0x03cc
+#define APMU_PCIE_CLK_RES_CTRL_PORTB	0x03d4
+#define APMU_PCIE_CLK_RES_CTRL_PORTC	0x03dc
 
 #define HREAD4(sc, reg)							\
 	(bus_space_read_4((sc)->sc_iot, (sc)->sc_ioh, (reg)))
@@ -112,6 +151,22 @@ static struct smtclock k1_apbc_clocks[] = {
 	{ K1_CLK_UART7, APBC_UART7_CLK_RST, 1 },
 	{ K1_CLK_UART8, APBC_UART8_CLK_RST, 1 },
 	{ K1_CLK_UART9, APBC_UART9_CLK_RST, 1 },
+	{ K1_CLK_TWSI0, APBC_TWSI0_CLK_RST, 1 },
+	{ K1_CLK_TWSI1, APBC_TWSI1_CLK_RST, 1 },
+	{ K1_CLK_TWSI2, APBC_TWSI2_CLK_RST, 1 },
+	{ K1_CLK_TWSI4, APBC_TWSI4_CLK_RST, 1 },
+	{ K1_CLK_TWSI5, APBC_TWSI5_CLK_RST, 1 },
+	{ K1_CLK_TWSI6, APBC_TWSI6_CLK_RST, 1 },
+	{ K1_CLK_TWSI7, APBC_TWSI7_CLK_RST, 1 },
+	{ K1_CLK_TWSI8, APBC_TWSI8_CLK_RST, 1 },
+	{ K1_CLK_TWSI0_BUS, APBC_TWSI0_CLK_RST, 0 },
+	{ K1_CLK_TWSI1_BUS, APBC_TWSI1_CLK_RST, 0 },
+	{ K1_CLK_TWSI2_BUS, APBC_TWSI2_CLK_RST, 0 },
+	{ K1_CLK_TWSI4_BUS, APBC_TWSI4_CLK_RST, 0 },
+	{ K1_CLK_TWSI5_BUS, APBC_TWSI5_CLK_RST, 0 },
+	{ K1_CLK_TWSI6_BUS, APBC_TWSI6_CLK_RST, 0 },
+	{ K1_CLK_TWSI7_BUS, APBC_TWSI7_CLK_RST, 0 },
+	{ K1_CLK_TWSI8_BUS, APBC_TWSI8_CLK_RST, 0 },
 	{ -1 },
 };
 
@@ -125,6 +180,14 @@ static struct smtreset k1_apbc_resets[] = {
 	{ K1_RESET_UART7, APBC_UART1_CLK_RST, 2, -1 },
 	{ K1_RESET_UART8, APBC_UART1_CLK_RST, 2, -1 },
 	{ K1_RESET_UART9, APBC_UART1_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI0, APBC_TWSI0_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI1, APBC_TWSI1_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI2, APBC_TWSI2_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI4, APBC_TWSI4_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI5, APBC_TWSI5_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI6, APBC_TWSI6_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI7, APBC_TWSI7_CLK_RST, 2, -1 },
+	{ K1_RESET_TWSI8, APBC_TWSI8_CLK_RST, 2, -1 },
 	{ -1 },
 };
 
@@ -144,6 +207,8 @@ static struct smtreset k1_apmu_resets[] = {
 	{ K1_RESET_PCIE0_SLAVE, APMU_PCIE_CLK_RES_CTRL_PORTA, -1, 4 },
 	{ K1_RESET_PCIE0_DBI, APMU_PCIE_CLK_RES_CTRL_PORTA, -1, 3 },
 	{ K1_RESET_PCIE0_GLOBAL, APMU_PCIE_CLK_RES_CTRL_PORTA, 8, -1 },
+	{ K1_RESET_PCIE1_GLOBAL, APMU_PCIE_CLK_RES_CTRL_PORTB, 8, -1 },
+	{ K1_RESET_PCIE2_GLOBAL, APMU_PCIE_CLK_RES_CTRL_PORTC, 8, -1 },
 	{ -1 },
 };
 
@@ -301,6 +366,25 @@ smtclock_enable(void *cookie, uint32_t *cells, int on)
 		return;
 	}
 
+	if (OF_is_compatible(sc->sc_node, "spacemit,k1-syscon-apbc")) {
+		/*
+		 * To work around the fact that the APBC_TWSI8_CLK_RST
+		 * register is write-only, we enable both clocks and
+		 * clear the reset at the same time.
+		 */
+		switch (idx) {
+		case K1_CLK_TWSI8:
+		case K1_CLK_TWSI8_BUS:
+			if (on)
+				HWRITE4(sc, APBC_TWSI8_CLK_RST,
+				    APBC_TWSI8_CLK_RST_FNCLK |
+				    APBC_TWSI8_CLK_RST_APBCLK);
+			else
+				HWRITE4(sc, clock->reg, 0);
+			return;
+		}
+	}
+
 	if (on)
 		HSET4(sc, clock->reg, (1U << clock->bit));
 	else
@@ -325,6 +409,25 @@ smtclock_reset(void *cookie, uint32_t *cells, int assert)
 	if (reset->idx == -1) {
 		printf("%s: 0x%08x\n", __func__, idx);
 		return;
+	}
+
+	if (OF_is_compatible(sc->sc_node, "spacemit,k1-syscon-apbc")) {
+		/*
+		 * To work around the fact that the APBC_TWSI8_CLK_RST
+		 * register is write-only, we enable both clocks and
+		 * clear the reset at the same time.
+		 */
+		switch (idx) {
+		case K1_RESET_TWSI8:
+			if (assert)
+				HWRITE4(sc, APBC_TWSI8_CLK_RST,
+				    APBC_TWSI8_CLK_RST_RST);
+			else
+				HWRITE4(sc, APBC_TWSI8_CLK_RST,
+				    APBC_TWSI8_CLK_RST_FNCLK |
+				    APBC_TWSI8_CLK_RST_APBCLK);
+			return;
+		}
 	}
 
 	if (reset->assert_bit != -1)
