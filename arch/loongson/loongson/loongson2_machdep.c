@@ -1,4 +1,4 @@
-/*	$OpenBSD: loongson2_machdep.c,v 1.17 2019/12/20 13:34:41 visa Exp $	*/
+/*	$OpenBSD: loongson2_machdep.c,v 1.18 2026/04/06 19:34:08 mlarkin Exp $	*/
 
 /*
  * Copyright (c) 2009, 2010 Miodrag Vallat.
@@ -29,10 +29,6 @@
 #include <machine/loongson2.h>
 #include <machine/memconf.h>
 #include <machine/pmon.h>
-
-#ifdef HIBERNATE
-#include <machine/hibernate_var.h>
-#endif /* HIBERNATE */
 
 #include <loongson/dev/bonitoreg.h>
 
@@ -164,9 +160,6 @@ loongson2f_setup(u_long memlo, u_long memhi)
 		    memlo /* + memhi */;
 		loongson_dma_base = PCI_DDR_BASE ^ DDR_PHYSICAL_BASE;
 	}
-#ifdef HIBERNATE
-	mem_layout[0].mem_first_page += HIBERNATE_RESERVED_PAGES;
-#endif
 
 	/*
 	 * Allow access to memory beyond 256MB, by programming the

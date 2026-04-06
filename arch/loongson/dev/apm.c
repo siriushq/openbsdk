@@ -1,4 +1,4 @@
-/*	$OpenBSD: apm.c,v 1.44 2024/05/29 06:39:13 jsg Exp $	*/
+/*	$OpenBSD: apm.c,v 1.45 2026/04/06 19:34:08 mlarkin Exp $	*/
 
 /*-
  * Copyright (c) 2001 Alexander Guy.  All rights reserved.
@@ -45,7 +45,6 @@
 #include <sys/buf.h>
 #include <sys/event.h>
 #include <sys/reboot.h>
-#include <sys/hibernate.h>
 
 #include <machine/autoconf.h>
 #include <machine/conf.h>
@@ -235,17 +234,6 @@ apmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
 		else
 			error = apm_suspend(APM_IOC_SUSPEND);
 		break;
-#ifdef HIBERNATE
-	case APM_IOC_HIBERNATE:
-		if ((flag & FWRITE) == 0)
-			error = EBADF;
-		else if (sys_platform->suspend == NULL ||
-		    sys_platform->resume == NULL)
-			error = EOPNOTSUPP;
-		else
-			error = apm_suspend(APM_IOC_HIBERNATE);
-		break;
-#endif
 	case APM_IOC_PRN_CTL:
 		if ((flag & FWRITE) == 0)
 			error = EBADF;
@@ -391,17 +379,6 @@ apm_suspend(int state)
 	rv = config_suspend_all(DVACT_SUSPEND);
 
 	suspend_randomness();
-
-#ifdef HIBERNATE
-	if (state == APM_IOC_HIBERNATE) {
-		uvm_pmr_zero_everything();
-		if (hibernate_suspend()) {
-			printf("apm: hibernate_suspend failed");
-			uvm_pmr_dirty_everything();
-			return (ECANCELED);
-		}
-	}
-#endif
 
 	/* XXX
 	 * Flag to disk drivers that they should "power down" the disk

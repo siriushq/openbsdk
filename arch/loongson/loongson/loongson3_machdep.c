@@ -1,4 +1,4 @@
-/*	$OpenBSD: loongson3_machdep.c,v 1.1 2015/08/15 22:31:38 miod Exp $	*/
+/*	$OpenBSD: loongson3_machdep.c,v 1.2 2026/04/06 19:34:08 mlarkin Exp $	*/
 
 /*
  * Copyright (c) 2009, 2010, 2014 Miodrag Vallat.
@@ -29,10 +29,6 @@
 #include <machine/memconf.h>
 #include <machine/pmon.h>
 
-#ifdef HIBERNATE
-#include <machine/hibernate_var.h>
-#endif /* HIBERNATE */
-
 extern struct phys_mem_desc mem_layout[MAXMEMSEGS];
 
 void	loongson3a_setup(u_long, u_long);
@@ -61,9 +57,6 @@ loongson3a_setup(u_long memlo, u_long memhi)
 	/* do NOT stomp on exception area */
 	mem_layout[0].mem_first_page = atop(MEMLO_BASE) + 1;
 	mem_layout[0].mem_last_page = atop(MEMLO_BASE) + memlo;
-#ifdef HIBERNATE
-	mem_layout[0].mem_first_page += HIBERNATE_RESERVED_PAGES;
-#endif
 
 	if (memhi != 0) {
 #ifdef notyet

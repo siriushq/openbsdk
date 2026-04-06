@@ -1,4 +1,4 @@
-/*	$OpenBSD: locore.S,v 1.9 2021/02/11 14:44:13 visa Exp $ */
+/*	$OpenBSD: locore.S,v 1.10 2026/04/06 19:34:08 mlarkin Exp $ */
 
 /*
  * Copyright (c) 2001-2004 Opsycon AB  (www.opsycon.se / www.opsycon.com)
@@ -73,25 +73,6 @@ locore_start:
 	jr	ra
 	nop
 	.end	locore_start
-
-#ifdef HIBERNATE
-
-	/* Switch to hibernate resume pagetable */
-LEAF(hibernate_activate_resume_pt_machdep, 0)				/* { */
-	/* XXX TBD */
-	j	ra
-END(hibernate_activate_resume_pt_machdep)				/* } */
-
-LEAF(hibernate_switch_stack_machdep, 0)					/* { */
-	/* XXX TBD */
-	j	ra
-END(hibernate_switch_stack_machdep)					/* } */
-
-LEAF(hibernate_resume_machdep, 0)					/* { */
-	j	ra
-END(hibernate_resume_machdep)					/* } */
-
-#endif /* HIBERNATE */
 
 #ifdef MULTIPROCESSOR
 
