@@ -1,4 +1,4 @@
-#	$OpenBSD: files.riscv64,v 1.35 2026/04/06 10:30:27 kettenis Exp $
+#	$OpenBSD: files.riscv64,v 1.36 2026/04/06 19:48:07 kettenis Exp $
 
 # Standard stanzas config(8) can't run without
 maxpartitions 16
@@ -188,6 +188,11 @@ include	"dev/hid/files.hid"
 
 # Machine-independent I2C drivers
 include "dev/i2c/files.i2c"
+
+# SpacemiT P1 PMIC
+device	smtpmic
+attach	smtpmic at i2c
+file	arch/riscv64/dev/smtpmic.c		smtpmic
 
 # FDT now requires drm (which is part of pci)
 include "dev/mii/files.mii"
