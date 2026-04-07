@@ -1,4 +1,4 @@
-/*	$OpenBSD: smtcomphy.c,v 1.1 2026/04/05 18:08:11 kettenis Exp $	*/
+/*	$OpenBSD: smtcomphy.c,v 1.2 2026/04/07 08:29:30 kettenis Exp $	*/
 /*
  * Copyright (c) 2026 Mark Kettenis <kettenis@openbsd.org>
  *
@@ -34,15 +34,41 @@
 #define  PLL_READY			(1U << 0)
 #define  CFG_INTERNAL_TIMER_ADJ_MASK	(0xf << 7)
 #define  CFG_INTERNAL_TIMER_ADJ_USB3	(0x2 << 7)
+#define  CFG_INTERNAL_TIMER_ADJ_PCIE	(0x6 << 7)
 #define  CFG_SW_PHY_INIT_DONE		(1U << 11)
+#define PCIE_RC_DONE_STATUS		0x0018
+#define  CFG_FORCE_RCV_RETRY		(1U << 10)
+#define PCIE_RC_CAL_REG2(_lane)		(0x0020 + (_lane) * 0x0400)
+#define  RC_CAL_TOGGLE			(1U << 22)
+#define  CLKSEL_MASK			(0x7 << 29)
+#define  CLKSEL_24M			(0x3 << 29)
 #define PCIE_PU_PLL_1			0x0048
 #define  REF_100_WSSC			(1U << 12)
 #define  FREF_SEL_MASK			(0x7 << 13)
 #define  FREF_SEL_24M			(0x1 << 13)
 #define  SSC_DEP_SEL_MASK		(0xf << 16)
+#define  SSC_DEP_SEL_NONE		(0x0 << 16)
 #define  SSC_DEP_SEL_5000PPM		(0xa << 16)
+#define PCIE_PU_PLL_2			0x004c
+#define  GEN_REF100			(1U << 4)
+#define PCIE_RX_REG1(_lane)		(0x0050 + (_lane) * 0x0400)
+#define  AFE_RTERM_REG_MASK		(0xf << 8)
+#define  AFE_RTERM_REG_SHIFT		8
+#define  EN_RTERM			(1U << 3)
+#define PCIE_RX_REG2(_lane)		(0x0054 + (_lane) * 0x0400)
+#define  RX_RTERM_SEL			(1U << 5)
+#define PCIE_LTSSM_DIS_ENTRY(_lane)	(0x005c + (_lane) * 0x0400)
+#define  CFG_REFCLK_MODE_MASK		(0x3 << 8)
+#define  CFG_REFCLK_MODE_DRIVER		(0x1 << 8)
+#define  OVRD_REFCLK_MODE		(1U << 10)
+#define PCIE_TX_REG1(_lane)		(0x0064 + (_lane) * 0x0400)
+#define  TX_RTERM_REG_MASK		(0xf << 12)
+#define  TX_RTERM_REG_SHIFT		12
+#define  TX_RTERM_SEL			(1U << 25)
 #define USB3_TEST_CTRL			0x0068
 #define PCIE_RCAL_RESULT		0x0084
+#define  RTERM_VALUE_RX(_val)		(((_val) >> 0) & 0xf)
+#define  RTERM_VALUE_TX(_val)		(((_val) >> 4) & 0xf)
 #define  R_TUNE_DONE			(1U << 10)
 
 /* APMU registers */
@@ -55,6 +81,10 @@
 	(bus_space_read_4((sc)->sc_iot, (sc)->sc_ioh, (reg)))
 #define HWRITE4(sc, reg, val)						\
 	bus_space_write_4((sc)->sc_iot, (sc)->sc_ioh, (reg), (val))
+
+/* Calibration values (shared amongst ports). */
+uint32_t rx_rterm;
+uint32_t tx_rterm;
 
 struct smtcomphy_softc {
 	struct device		sc_dev;
@@ -149,8 +179,15 @@ smtcomphy_combo_init(struct smtcomphy_softc *sc)
 	regmap_write_4(sc->sc_apmu, APMU_PCIE_CLK_RES_CTRL_PORTA, val);
 
 	val = HREAD4(sc, PCIE_RCAL_RESULT);
-	if (val & R_TUNE_DONE)
+	if (val & R_TUNE_DONE) {
+		/*
+		 * Save calibration values, such that they can be used
+		 * by the other PCIe ports.
+		 */
+		rx_rterm = RTERM_VALUE_RX(val);
+		tx_rterm = RTERM_VALUE_TX(val);
 		return 0;
+	}
 
 	/* Firmware should have calibrated the PHY for us. */
 	printf("%s: not calibrated\n", sc->sc_dev.dv_xname);
@@ -202,6 +239,35 @@ smtcomphy_pll_init_usb3(struct smtcomphy_softc *sc)
 	smtcomphy_pll_init_common(sc);
 }
 
+void
+smtcomphy_pll_init_pcie(struct smtcomphy_softc *sc)
+{
+	uint32_t val;
+	int lane;
+
+	for (lane = 0; lane < sc->sc_num_lanes; lane++) {
+		val = HREAD4(sc, PCIE_PU_ADDR_CLK_CFG(lane));
+		val &= ~CFG_INTERNAL_TIMER_ADJ_MASK;
+		val |= CFG_INTERNAL_TIMER_ADJ_PCIE;
+		HWRITE4(sc, PCIE_PU_ADDR_CLK_CFG(lane), val);
+	}
+
+	val = HREAD4(sc, PCIE_RC_DONE_STATUS);
+	val |= CFG_FORCE_RCV_RETRY;
+	HWRITE4(sc, PCIE_RC_DONE_STATUS, val);
+
+	val = HREAD4(sc, PCIE_PU_PLL_1);
+	val &= ~SSC_DEP_SEL_MASK;
+	val |= SSC_DEP_SEL_NONE;
+	HWRITE4(sc, PCIE_PU_PLL_1, val);
+
+	val = HREAD4(sc, PCIE_PU_PLL_2);
+	val |= GEN_REF100;
+	HWRITE4(sc, PCIE_PU_PLL_2, val);
+
+	smtcomphy_pll_init_common(sc);
+}
+
 int
 smtcomphy_combo_enable(void *cookie, uint32_t *cells)
 {
@@ -237,6 +303,43 @@ smtcomphy_combo_enable(void *cookie, uint32_t *cells)
 int
 smtcomphy_pcie_enable(void *cookie, uint32_t *cells)
 {
-	/* No PCIe support yet. */
-	return EINVAL;
+	struct smtcomphy_softc *sc = cookie;
+	uint32_t val;
+	int lane;
+
+	for (lane = 0; lane < sc->sc_num_lanes; lane++) {
+		val = HREAD4(sc, PCIE_RX_REG1(lane));
+		val &= ~AFE_RTERM_REG_MASK;
+		val |= rx_rterm << AFE_RTERM_REG_SHIFT;
+		val |= EN_RTERM;
+		HWRITE4(sc, PCIE_RX_REG1(lane), val);
+
+		val = HREAD4(sc, PCIE_RX_REG2(lane));
+		val &= ~RX_RTERM_SEL;
+		HWRITE4(sc, PCIE_RX_REG2(lane), val);
+
+		val = HREAD4(sc, PCIE_TX_REG1(lane));
+		val &= ~TX_RTERM_REG_MASK;
+		val |= tx_rterm << TX_RTERM_REG_SHIFT;
+		val |= TX_RTERM_SEL;
+		HWRITE4(sc, PCIE_TX_REG1(lane), val);
+
+		val = HREAD4(sc, PCIE_RC_CAL_REG2(lane));
+		val &= ~CLKSEL_MASK;
+		val |= CLKSEL_24M;
+		val &= ~RC_CAL_TOGGLE;
+		HWRITE4(sc, PCIE_RC_CAL_REG2(lane), val);
+		val |= RC_CAL_TOGGLE;
+		HWRITE4(sc, PCIE_RC_CAL_REG2(lane), val);
+
+		val = HREAD4(sc, PCIE_LTSSM_DIS_ENTRY(lane));
+		val |= OVRD_REFCLK_MODE;
+		val &= ~CFG_REFCLK_MODE_MASK;
+		val |= CFG_REFCLK_MODE_DRIVER;
+		HWRITE4(sc, PCIE_LTSSM_DIS_ENTRY(lane), val);
+	}
+
+	smtcomphy_pll_init_pcie(sc);
+
+	return 0;
 }
