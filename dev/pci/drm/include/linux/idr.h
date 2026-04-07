@@ -1,4 +1,4 @@
-/*	$OpenBSD: idr.h,v 1.8 2026/03/08 23:31:50 jsg Exp $	*/
+/*	$OpenBSD: idr.h,v 1.9 2026/04/07 09:04:16 jsg Exp $	*/
 /*
  * Copyright (c) 2016 Mark Kettenis
  *
@@ -32,6 +32,11 @@ struct idr_entry {
 struct idr {
 	SPLAY_HEAD(idr_tree, idr_entry) tree;
 };
+
+#define DEFINE_IDR(name)					\
+	struct idr name = {					\
+		.tree = SPLAY_INITIALIZER(&name.idr.tree),	\
+	}
 
 void idr_init(struct idr *);
 void idr_preload(unsigned int);
