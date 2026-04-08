@@ -1,4 +1,4 @@
-/*	$OpenBSD: vfs_vnops.c,v 1.125 2025/01/06 08:57:23 mpi Exp $	*/
+/*	$OpenBSD: vfs_vnops.c,v 1.126 2026/04/08 11:32:24 jsg Exp $	*/
 /*	$NetBSD: vfs_vnops.c,v 1.20 1996/02/04 02:18:41 christos Exp $	*/
 
 /*
@@ -98,6 +98,8 @@ vn_open(struct nameidata *ndp, int fmode, int cmode)
         if ((fmode & (FREAD|FWRITE)) == 0)
 		return (EINVAL);
 	if ((fmode & (O_TRUNC | FWRITE)) == O_TRUNC)
+		return (EINVAL);
+	if ((fmode & (O_CREAT | O_DIRECTORY)) == (O_CREAT | O_DIRECTORY))
 		return (EINVAL);
 	if (fmode & O_CREAT) {
 		ndp->ni_cnd.cn_nameiop = CREATE;
