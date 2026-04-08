@@ -1,4 +1,4 @@
-/*	$OpenBSD: xhci_fdt.c,v 1.27 2026/03/31 14:42:54 kettenis Exp $	*/
+/*	$OpenBSD: xhci_fdt.c,v 1.28 2026/04/08 13:43:32 kettenis Exp $	*/
 /*
  * Copyright (c) 2017 Mark Kettenis <kettenis@openbsd.org>
  *
@@ -26,6 +26,7 @@
 
 #include <dev/ofw/openfirm.h>
 #include <dev/ofw/ofw_clock.h>
+#include <dev/ofw/ofw_gpio.h>
 #include <dev/ofw/ofw_misc.h>
 #include <dev/ofw/ofw_power.h>
 #include <dev/ofw/ofw_regulator.h>
@@ -460,12 +461,30 @@ xhci_init_phys(struct xhci_fdt_softc *sc)
 void
 xhci_init_hubs(struct xhci_fdt_softc *sc)
 {
+	uint32_t *reset_gpio;
+	ssize_t reset_gpiolen;
 	int node, vdd_supply;
 
 	for (node = OF_child(sc->sc_node); node; node = OF_peer(node)) {
 		vdd_supply = OF_getpropint(node, "vdd-supply", 0);
 		if (vdd_supply)
 			regulator_enable(vdd_supply);
+
+		/*
+		 * Linux uses a 14ms delay for the WCH CH344 USB hub
+		 * and shorter delays for others.
+		 */
+		delay(15000);
+
+		reset_gpiolen = OF_getproplen(node, "reset-gpios");
+		if (reset_gpiolen <= 0)
+			continue;
+		reset_gpio = malloc(reset_gpiolen, M_TEMP, M_WAITOK);
+		OF_getpropintarray(node, "reset-gpios", reset_gpio,
+		    reset_gpiolen);
+		gpio_controller_config_pin(reset_gpio, GPIO_CONFIG_OUTPUT);
+		gpio_controller_set_pin(reset_gpio, 0);
+		free(reset_gpio, M_TEMP, reset_gpiolen);
 	}
 }
 
