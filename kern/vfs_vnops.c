@@ -1,4 +1,4 @@
-/*	$OpenBSD: vfs_vnops.c,v 1.126 2026/04/08 11:32:24 jsg Exp $	*/
+/*	$OpenBSD: vfs_vnops.c,v 1.127 2026/04/08 12:08:25 jsg Exp $	*/
 /*	$NetBSD: vfs_vnops.c,v 1.20 1996/02/04 02:18:41 christos Exp $	*/
 
 /*
@@ -132,6 +132,10 @@ vn_open(struct nameidata *ndp, int fmode, int cmode)
 			vp = ndp->ni_vp;
 			if (fmode & O_EXCL) {
 				error = EEXIST;
+				goto bad;
+			}
+			if (vp->v_type == VDIR) {
+				error = EISDIR;
 				goto bad;
 			}
 			fmode &= ~O_CREAT;
