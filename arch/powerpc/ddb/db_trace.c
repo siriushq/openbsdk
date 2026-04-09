@@ -1,4 +1,4 @@
-/*	$OpenBSD: db_trace.c,v 1.21 2024/11/07 16:02:29 miod Exp $	*/
+/*	$OpenBSD: db_trace.c,v 1.22 2026/04/09 17:57:09 gkoehler Exp $	*/
 /*	$NetBSD: db_trace.c,v 1.15 1996/02/22 23:23:41 gwr Exp $	*/
 
 /*
@@ -244,13 +244,18 @@ stacktrace_save_at(struct stacktrace *st, unsigned int skip)
 {
 	vaddr_t		 lr, sp, lastsp;
 
-	sp = (vaddr_t)__builtin_frame_address(0);
+	st->st_count = 0;
+
+	/*
+	 * Each function saves its return address in its caller's
+	 * frame.  Start at our caller's frame.
+	 */
+	lr = (vaddr_t)__builtin_return_address(0) - 4;
+	sp = *(vaddr_t *)__builtin_frame_address(0);
 	if (!INKERNEL(sp) && !ININTSTK(sp))
 		return;
 
-	st->st_count = 0;
 	while (st->st_count < STACKTRACE_MAX) {
-		lr = *(vaddr_t *)(sp + 4) - 4;
 		if (lr & 3)
 			break;
 
@@ -266,6 +271,8 @@ stacktrace_save_at(struct stacktrace *st, unsigned int skip)
 			break;
 		if (!INKERNEL(sp) && !ININTSTK(sp))
 			break;
+
+		lr = *(vaddr_t *)(sp + 4) - 4;
 	}
 }
 
