@@ -1,4 +1,4 @@
-/*	$OpenBSD: xhci_fdt.c,v 1.28 2026/04/08 13:43:32 kettenis Exp $	*/
+/*	$OpenBSD: xhci_fdt.c,v 1.29 2026/04/09 15:13:45 kettenis Exp $	*/
 /*
  * Copyright (c) 2017 Mark Kettenis <kettenis@openbsd.org>
  *
@@ -89,6 +89,7 @@ xhci_fdt_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct xhci_fdt_softc *sc = (struct xhci_fdt_softc *)self;
 	struct fdt_attach_args *faa = aux;
+	uint32_t vbus_supply;
 	int error = 0;
 	int idx;
 
@@ -156,6 +157,10 @@ xhci_fdt_attach(struct device *parent, struct device *self, void *aux)
 		printf(": can't initialize hardware\n");
 		goto disestablish_ret;
 	}
+
+	vbus_supply = OF_getpropint(sc->sc_node, "vbus-supply", 0);
+	if (vbus_supply)
+		regulator_enable(vbus_supply);
 
 	xhci_init_phys(sc);
 	xhci_init_hubs(sc);
@@ -593,7 +598,8 @@ void
 imx8mp_usb_init(struct xhci_fdt_softc *sc, uint32_t *cells)
 {
 	uint32_t phy_reg[2], reg;
-	int node, vbus_supply;
+	uint32_t vbus_supply;
+	int node;
 
 	node = OF_getnodebyphandle(cells[0]);
 	KASSERT(node != 0);
@@ -649,7 +655,8 @@ void
 imx8mq_usb_init(struct xhci_fdt_softc *sc, uint32_t *cells)
 {
 	uint32_t phy_reg[2], reg;
-	int node, vbus_supply;
+	uint32_t vbus_supply;
+	int node;
 
 	node = OF_getnodebyphandle(cells[0]);
 	KASSERT(node != 0);
