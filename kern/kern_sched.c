@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_sched.c,v 1.115 2026/04/08 12:40:12 jsg Exp $	*/
+/*	$OpenBSD: kern_sched.c,v 1.116 2026/04/09 01:30:02 jsg Exp $	*/
 /*
  * Copyright (c) 2007, 2008 Artur Grabowski <art@openbsd.org>
  *
@@ -876,15 +876,18 @@ sched_cpuadjust(int newblockcpu)
 int
 sysctl_hwsmt(void *oldp, size_t *oldlenp, void *newp, size_t newlen)
 {
-	int err, newsmt = 1, newblockcpu = 0;
+	int err, newsmt = 1, newblockcpu;
 
 	if (sched_blockcpu & CPUTYP_SMT)
 		newsmt = 0;
 	err = sysctl_int_bounded(oldp, oldlenp, newp, newlen, &newsmt, 0, 1);
 	if (err || newp == NULL)
 		return err;
+	newblockcpu = sched_blockcpu;
 	if (newsmt)
 		newblockcpu &= ~CPUTYP_SMT;
+	else
+		newblockcpu |= CPUTYP_SMT;
 	return sched_cpuadjust(newblockcpu);
 } 
 
