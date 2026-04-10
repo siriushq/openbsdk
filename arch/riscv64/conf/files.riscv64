@@ -1,4 +1,4 @@
-#	$OpenBSD: files.riscv64,v 1.36 2026/04/06 19:48:07 kettenis Exp $
+#	$OpenBSD: files.riscv64,v 1.37 2026/04/10 17:37:00 kettenis Exp $
 
 # Standard stanzas config(8) can't run without
 maxpartitions 16
@@ -144,6 +144,11 @@ file	arch/riscv64/dev/smtgpio.c		smtgpio
 device	smtiic: i2cbus
 attach	smtiic at fdt
 file	arch/riscv64/dev/smtiic.c		smtiic
+
+# SpacemiT  pinctrl
+device	smtpinctrl
+attach	smtpinctrl at fdt
+file	arch/riscv64/dev/smtpinctrl.c		smtpinctrl
 
 # StarFive clock controller
 device	stfclock
