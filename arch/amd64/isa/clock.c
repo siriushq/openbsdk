@@ -1,4 +1,4 @@
-/*	$OpenBSD: clock.c,v 1.43 2026/03/11 16:18:42 kettenis Exp $	*/
+/*	$OpenBSD: clock.c,v 1.44 2026/04/11 16:24:13 deraadt Exp $	*/
 /*	$NetBSD: clock.c,v 1.1 2003/04/26 18:39:50 fvdl Exp $	*/
 
 /*-
@@ -551,7 +551,8 @@ rtcalarm_suspend(struct timeval *delta)
 	rtcput(&rtclk);
 	splx(s);
 
-	while (mc146818_read(NULL, MC_REGC) & MC_REGC_AF);
+	while (mc146818_read(NULL, MC_REGC) & MC_REGC_AF)
+		;
 	mc146818_write(NULL, MC_REGB, MC_REGB_24HR | MC_REGB_AIE);
 
 	return 0;
