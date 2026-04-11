@@ -1,4 +1,4 @@
-/*	$OpenBSD: uvm_swap.c,v 1.179 2026/02/11 22:34:41 deraadt Exp $	*/
+/*	$OpenBSD: uvm_swap.c,v 1.180 2026/04/11 01:36:23 deraadt Exp $	*/
 /*	$NetBSD: uvm_swap.c,v 1.40 2000/11/17 11:39:39 mrg Exp $	*/
 
 /*
@@ -218,6 +218,15 @@ struct swap_priority swap_priority;	/* [S] */
 struct mutex uvm_swap_data_lock = MUTEX_INITIALIZER(IPL_MPFLOOR);
 struct rwlock swap_syscall_lock = RWLOCK_INITIALIZER("swplk");
 
+#define SWAP_ENCRYPT_BUFFERS	32
+struct sebounce {
+	struct vm_page *seb_pps[SWCLUSTPAGES];
+	int		seb_busy;
+} sebounce[SWAP_ENCRYPT_BUFFERS];
+
+struct mutex sebouncemtx = MUTEX_INITIALIZER(IPL_VM);
+volatile int seb_free = nitems(sebounce);
+
 /*
  * prototypes
  */
@@ -258,6 +267,8 @@ void uvm_swap_initcrypt(struct swapdev *, int);
 void
 uvm_swap_init(void)
 {
+	int slot;
+
 	/*
 	 * first, init the swap list, its counter, and its lock.
 	 * then get a handle on the vnode for /dev/drum by using
@@ -285,6 +296,26 @@ uvm_swap_init(void)
 	    "swp vnx", NULL);
 	pool_init(&vndbuf_pool, sizeof(struct vndbuf), 0, IPL_BIO, 0,
 	    "swp vnd", NULL);
+
+	/* Allocate array of swap-encrypt bounce buffers */
+	for (slot = 0; slot < nitems(sebounce); slot++) {
+		struct pglist   pgl;
+		int error, i;
+
+		TAILQ_INIT(&pgl);
+
+		error = uvm_pglistalloc(SWCLUSTPAGES * PAGE_SIZE,
+		    dma_constraint.ucr_low, dma_constraint.ucr_high,
+		    0, 0, &pgl, SWCLUSTPAGES, UVM_PLA_WAITOK);
+		if (error)
+			printf("cannot alloc sebounce %d\n", slot);
+		for (i = 0; i < SWCLUSTPAGES; i++) {
+			sebounce[slot].seb_pps[i] = TAILQ_FIRST(&pgl);
+			atomic_setbits_int(&sebounce[slot].seb_pps[i]->pg_flags,
+			    PG_BUSY);
+			TAILQ_REMOVE(&pgl, sebounce[slot].seb_pps[i], pageq);
+		}
+	}
 
 	/* Setup the initial swap partition */
 	swapmount();
@@ -331,19 +362,28 @@ uvm_swap_initcrypt(struct swapdev *sdp, int npages)
 boolean_t
 uvm_swap_allocpages(struct vm_page **pps, int npages)
 {
-	struct pglist	pgl;
-	int i;
+	int slot, i;
 
-	TAILQ_INIT(&pgl);
-	if (uvm_pglistalloc(npages * PAGE_SIZE, dma_constraint.ucr_low,
-	    dma_constraint.ucr_high, 0, 0, &pgl, npages, UVM_PLA_NOWAIT))
+	if (seb_free == 0)
 		return FALSE;
+	mtx_enter(&sebouncemtx);
+	for (slot = 0; slot < nitems(sebounce); slot++) {
+		if (sebounce[slot].seb_busy == 0)
+			break;
+	}
+	if (slot == nitems(sebounce)) {
+		printf("uvm_swap_allocpages: seb_free inconsistant");
+		mtx_leave(&sebouncemtx);
+		return FALSE;
+	}
+	sebounce[slot].seb_busy = 1;
+	atomic_dec_int(&seb_free);
+	mtx_leave(&sebouncemtx);
 
 	for (i = 0; i < npages; i++) {
-		pps[i] = TAILQ_FIRST(&pgl);
-		/* *sigh* */
+		pps[i] = sebounce[slot].seb_pps[i];
+		/* XXX why?  all callers i can identify have done this */
 		atomic_setbits_int(&pps[i]->pg_flags, PG_BUSY);
-		TAILQ_REMOVE(&pgl, pps[i], pageq);
 	}
 
 	return TRUE;
@@ -352,11 +392,20 @@ uvm_swap_allocpages(struct vm_page **pps, int npages)
 void
 uvm_swap_freepages(struct vm_page **pps, int npages)
 {
-	int i;
+	int slot;
 
-	for (i = 0; i < npages; i++)
-		uvm_pagefree(pps[i]);
+	for (slot = 0; slot < nitems(sebounce); slot++)
+		if (pps[0] == sebounce[slot].seb_pps[0])
+			break;
+	if (slot == nitems(sebounce)) {
+		printf("uvm_swap_freepages: seb_free inconsistant");
+		return;
+	}
 
+	mtx_enter(&sebouncemtx);
+	sebounce[slot].seb_busy = 0;
+	atomic_inc_int(&seb_free);
+	mtx_leave(&sebouncemtx);
 }
 
 #ifdef UVM_SWAP_ENCRYPT

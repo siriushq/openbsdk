@@ -1,4 +1,4 @@
-/*	$OpenBSD: uvm_pdaemon.c,v 1.154 2026/02/11 22:34:41 deraadt Exp $	*/
+/*	$OpenBSD: uvm_pdaemon.c,v 1.155 2026/04/11 01:36:23 deraadt Exp $	*/
 /*	$NetBSD: uvm_pdaemon.c,v 1.23 2000/08/20 10:24:14 bjh21 Exp $	*/
 
 /*
@@ -80,6 +80,7 @@
 #endif
 
 #include <uvm/uvm.h>
+#include <uvm/uvm_swap.h>
 
 #include "drm.h"
 
@@ -707,6 +708,16 @@ uvmpd_scan_inactive(struct uvm_constraint_range *constraint, int shortage)
 		 */
 		if (atomic_load_sint(&uvmexp.paging) > (shortage - freed)) {
 			rw_exit(slock);
+			continue;
+		}
+
+		/*
+		 * If no swap encrypt buffers left, leave the page on the
+		 * inactive list for future processing
+		 */
+		if (seb_free == 0) {
+			rw_exit(slock);
+			atomic_inc_int(&uvmexp.swpskip);
 			continue;
 		}
 
