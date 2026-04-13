@@ -1,4 +1,4 @@
-/*	$OpenBSD: smtclock.c,v 1.3 2026/04/07 08:28:34 kettenis Exp $	*/
+/*	$OpenBSD: smtclock.c,v 1.4 2026/04/13 12:02:19 kettenis Exp $	*/
 /*
  * Copyright (c) 2026 Mark Kettenis <kettenis@openbsd.org>
  *
@@ -45,6 +45,7 @@
 #define K1_CLK_TWSI6		37
 #define K1_CLK_TWSI7		38
 #define K1_CLK_TWSI8		39
+#define K1_CLK_AIB		42
 #define K1_CLK_TWSI0_BUS	84
 #define K1_CLK_TWSI1_BUS	85
 #define K1_CLK_TWSI2_BUS	86
@@ -53,6 +54,7 @@
 #define K1_CLK_TWSI6_BUS	89
 #define K1_CLK_TWSI7_BUS	90
 #define K1_CLK_TWSI8_BUS	91
+#define K1_CLK_AIB_BUS		94
 
 /* APMU resets */
 #define K1_RESET_UART0		0
@@ -84,6 +86,8 @@
 #define K1_CLK_PCIE2_MASTER	34
 #define K1_CLK_PCIE2_SLAVE	35
 #define K1_CLK_PCIE2_DBI	36
+#define K1_CLK_EMAC0_BUS	37
+#define K1_CLK_EMAC1_BUS	39
 
 /* APMU resets */
 #define K1_RESET_USB30_AHB	8
@@ -101,6 +105,8 @@
 #define K1_RESET_PCIE2_SLAVE	32
 #define K1_RESET_PCIE2_DBI	33
 #define K1_RESET_PCIE2_GLOBAL	34
+#define K1_RESET_EMAC0		35
+#define K1_RESET_EMAC1		36
 
 /* APBC registers */
 #define APBC_UART1_CLK_RST		0x0000
@@ -113,6 +119,7 @@
 #define APBC_TWSI0_CLK_RST		0x002c
 #define APBC_TWSI1_CLK_RST		0x0030
 #define APBC_TWSI2_CLK_RST		0x0038
+#define APBC_AIB_CLK_RST		0x003c
 #define APBC_TWSI4_CLK_RST		0x0040
 #define APBC_TWSI5_CLK_RST		0x004c
 #define APBC_TWSI6_CLK_RST		0x0060
@@ -130,6 +137,8 @@
 #define APMU_PCIE_CLK_RES_CTRL_PORTA	0x03cc
 #define APMU_PCIE_CLK_RES_CTRL_PORTB	0x03d4
 #define APMU_PCIE_CLK_RES_CTRL_PORTC	0x03dc
+#define APMU_EMAC0_CLK_RST_CTRL		0x03e4
+#define APMU_EMAC1_CLK_RST_CTRL		0x03ec
 
 #define HREAD4(sc, reg)							\
 	(bus_space_read_4((sc)->sc_iot, (sc)->sc_ioh, (reg)))
@@ -171,6 +180,7 @@ static struct smtclock k1_apbc_clocks[] = {
 	{ K1_CLK_TWSI6, APBC_TWSI6_CLK_RST, 1 },
 	{ K1_CLK_TWSI7, APBC_TWSI7_CLK_RST, 1 },
 	{ K1_CLK_TWSI8, APBC_TWSI8_CLK_RST, 1 },
+	{ K1_CLK_AIB, APBC_AIB_CLK_RST, 1 },
 	{ K1_CLK_TWSI0_BUS, APBC_TWSI0_CLK_RST, 0 },
 	{ K1_CLK_TWSI1_BUS, APBC_TWSI1_CLK_RST, 0 },
 	{ K1_CLK_TWSI2_BUS, APBC_TWSI2_CLK_RST, 0 },
@@ -179,6 +189,7 @@ static struct smtclock k1_apbc_clocks[] = {
 	{ K1_CLK_TWSI6_BUS, APBC_TWSI6_CLK_RST, 0 },
 	{ K1_CLK_TWSI7_BUS, APBC_TWSI7_CLK_RST, 0 },
 	{ K1_CLK_TWSI8_BUS, APBC_TWSI8_CLK_RST, 0 },
+	{ K1_CLK_AIB_BUS, APBC_AIB_CLK_RST, 0 },
 	{ -1 },
 };
 
@@ -214,6 +225,8 @@ static struct smtclock k1_apmu_clocks[] = {
 	{ K1_CLK_PCIE2_MASTER, APMU_PCIE_CLK_RES_CTRL_PORTC, 2 },
 	{ K1_CLK_PCIE2_SLAVE, APMU_PCIE_CLK_RES_CTRL_PORTC, 1 },
 	{ K1_CLK_PCIE2_DBI, APMU_PCIE_CLK_RES_CTRL_PORTC, 0 },
+	{ K1_CLK_EMAC0_BUS, APMU_EMAC0_CLK_RST_CTRL, 0 },
+	{ K1_CLK_EMAC1_BUS, APMU_EMAC1_CLK_RST_CTRL, 0 },
 	{ -1 },
 };
 
@@ -233,6 +246,8 @@ static struct smtreset k1_apmu_resets[] = {
 	{ K1_RESET_PCIE2_SLAVE, APMU_PCIE_CLK_RES_CTRL_PORTC, -1, 4 },
 	{ K1_RESET_PCIE2_DBI, APMU_PCIE_CLK_RES_CTRL_PORTC, -1, 3 },
 	{ K1_RESET_PCIE2_GLOBAL, APMU_PCIE_CLK_RES_CTRL_PORTC, 8, -1 },
+	{ K1_RESET_EMAC0, APMU_EMAC0_CLK_RST_CTRL, -1, 1 },
+	{ K1_RESET_EMAC1, APMU_EMAC1_CLK_RST_CTRL, -1, 1 },
 	{ -1 },
 };
 
