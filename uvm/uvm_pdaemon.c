@@ -1,4 +1,4 @@
-/*	$OpenBSD: uvm_pdaemon.c,v 1.156 2026/04/11 01:57:22 deraadt Exp $	*/
+/*	$OpenBSD: uvm_pdaemon.c,v 1.157 2026/04/13 14:56:46 deraadt Exp $	*/
 /*	$NetBSD: uvm_pdaemon.c,v 1.23 2000/08/20 10:24:14 bjh21 Exp $	*/
 
 /*
@@ -282,8 +282,8 @@ uvm_pageout(void *arg)
 		if (shortage > 0)
 			shortage -= uvm_pmr_cache_drain();
 
-		inactive_shortage = MAX(inactive_shortage, size * 2);
 		shortage = MAX(shortage, size);
+		inactive_shortage = MAX(inactive_shortage, shortage);
 
 		uvm_lock_pageq();
 		uvmpd_scan(&constraint, shortage, inactive_shortage);
