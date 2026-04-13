@@ -1,4 +1,4 @@
-#	$OpenBSD: GENERIC,v 1.63 2026/04/10 17:55:14 kettenis Exp $
+#	$OpenBSD: GENERIC,v 1.64 2026/04/13 12:03:19 kettenis Exp $
 #
 # For further information on compiling OpenBSD kernels, see the config(8)
 # man page.
@@ -75,6 +75,7 @@ sfuart*		at fdt?
 # SpacemiT SoCs
 smtclock*	at fdt? early 1
 smtcomphy*	at fdt?
+smte*		at fdt?
 smtgpio*	at fdt?
 smtiic*		at fdt?
 iic*		at smtiic?
