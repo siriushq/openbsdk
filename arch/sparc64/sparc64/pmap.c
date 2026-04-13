@@ -1,4 +1,4 @@
-/*	$OpenBSD: pmap.c,v 1.127 2025/12/14 12:37:22 kettenis Exp $	*/
+/*	$OpenBSD: pmap.c,v 1.128 2026/04/13 09:10:14 kettenis Exp $	*/
 /*	$NetBSD: pmap.c,v 1.107 2001/08/31 16:47:41 eeh Exp $	*/
 /*
  * 
@@ -2579,6 +2579,7 @@ ctx_free(struct pmap *pm)
 {
 	int oldctx;
 #ifdef DIAGNOSTIC
+	u_int64_t tag, data;
 	int i;
 #endif
 	
@@ -2597,10 +2598,25 @@ ctx_free(struct pmap *pm)
 		db_enter();
 	}
 	for (i = 0; i < TSBENTS; i++) {
-		if (TSB_TAG_CTX(tsb_dmmu[i].tag) == oldctx ||
-		    TSB_TAG_CTX(tsb_immu[i].tag) == oldctx) {
-			printf("ctx_free: context %d still active\n", oldctx);
-			db_enter();
+		tag = READ_ONCE(tsb_dmmu[i].tag);
+                if (TSB_TAG_CTX(tag) == oldctx) {
+			data = READ_ONCE(tsb_dmmu[i].data);
+			atomic_cas_ulong((unsigned long *)&tsb_dmmu[i].tag,
+			    tag, TSB_TAG_INVALID);
+			printf("%s: context %d still active in DMMU TSB\n",
+			    __func__, oldctx);
+			printf("%s: tag 0x%016llx data 0x%016llx\n",
+			    __func__, tag, data);
+		}
+		tag = READ_ONCE(tsb_immu[i].tag);
+		if (TSB_TAG_CTX(tag) == oldctx) {
+			data = READ_ONCE(tsb_immu[i].data);
+			atomic_cas_ulong((unsigned long *)&tsb_immu[i].tag,
+			    tag, TSB_TAG_INVALID);
+			printf("%s: context %d still active in IMMU TSB\n",
+			    __func__, oldctx);
+			printf("%s: tag 0x%016llx data 0x%016llx\n",
+			    __func__, tag, data);
 		}
 	}
 #endif
