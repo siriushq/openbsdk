@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_sysctl.c,v 1.487 2026/03/31 16:46:22 deraadt Exp $	*/
+/*	$OpenBSD: kern_sysctl.c,v 1.488 2026/04/15 19:29:02 deraadt Exp $	*/
 /*	$NetBSD: kern_sysctl.c,v 1.17 1996/05/20 17:49:05 mrg Exp $	*/
 
 /*-
@@ -1941,7 +1941,7 @@ sysctl_doproc(int *name, u_int namelen, char *where, size_t *sizep)
 	doingzomb = 0;
 again:
 	for (; pr != NULL; pr = LIST_NEXT(pr, ps_list)) {
-		/* XXX skip processes in the middle of being zapped */
+		/* XXX skip processes in the middle of being created or zapped */
 		if (pr->ps_pgrp == NULL)
 			continue;
 
