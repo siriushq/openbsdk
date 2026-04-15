@@ -1,4 +1,4 @@
-/*	$OpenBSD: smtcomphy.c,v 1.2 2026/04/07 08:29:30 kettenis Exp $	*/
+/*	$OpenBSD: smtcomphy.c,v 1.3 2026/04/15 21:16:13 kettenis Exp $	*/
 /*
  * Copyright (c) 2026 Mark Kettenis <kettenis@openbsd.org>
  *
@@ -166,6 +166,7 @@ int
 smtcomphy_combo_init(struct smtcomphy_softc *sc)
 {
 	uint32_t apmu, val;
+	int timo;
 
 	apmu = OF_getpropint(sc->sc_node, "spacemit,apmu", 0);
 	sc->sc_apmu = regmap_byphandle(apmu);
@@ -179,6 +180,38 @@ smtcomphy_combo_init(struct smtcomphy_softc *sc)
 	regmap_write_4(sc->sc_apmu, APMU_PCIE_CLK_RES_CTRL_PORTA, val);
 
 	val = HREAD4(sc, PCIE_RCAL_RESULT);
+	if ((val & R_TUNE_DONE) == 0) {
+		/*
+		 * Firmware didn't do calibration, so give it a go
+		 * ourselves.
+		 */
+
+		/* Need to be in PCIe for calibration. */
+		val = regmap_read_4(sc->sc_apmu, APMU_PMUA_USB_PHY_CTRL0);
+		val &= ~APMU_COMBO_PHY_SEL;
+		regmap_write_4(sc->sc_apmu, APMU_PMUA_USB_PHY_CTRL0, val);
+
+		clock_enable(sc->sc_node, "dbi");
+		clock_enable(sc->sc_node, "mstr");
+		clock_enable(sc->sc_node, "slv");
+		reset_deassert(sc->sc_node, "dbi");
+		reset_deassert(sc->sc_node, "mstr");
+		reset_deassert(sc->sc_node, "slv");
+
+		for (timo = 1000; timo > 0; timo--) {
+			val = HREAD4(sc, PCIE_RCAL_RESULT);
+			if (val & R_TUNE_DONE)
+				break;
+			delay(500);
+		}
+
+		reset_assert(sc->sc_node, "dbi");
+		reset_assert(sc->sc_node, "mstr");
+		reset_assert(sc->sc_node, "slv");
+		clock_disable(sc->sc_node, "dbi");
+		clock_disable(sc->sc_node, "mstr");
+		clock_disable(sc->sc_node, "slv");
+	}
 	if (val & R_TUNE_DONE) {
 		/*
 		 * Save calibration values, such that they can be used
@@ -189,8 +222,7 @@ smtcomphy_combo_init(struct smtcomphy_softc *sc)
 		return 0;
 	}
 
-	/* Firmware should have calibrated the PHY for us. */
-	printf("%s: not calibrated\n", sc->sc_dev.dv_xname);
+	printf("%s: calibration failed\n", sc->sc_dev.dv_xname);
 	return -1;
 }
 
