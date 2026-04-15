@@ -2108,7 +2108,7 @@ static int init_tlb_lookup(struct intel_guc *guc)
 	if (!HAS_GUC_TLB_INVALIDATION(guc_to_gt(guc)->i915))
 		return 0;
 
-	xa_init_flags(&guc->tlb_lookup, XA_FLAGS_ALLOC);
+	xa_init_flags(&guc->tlb_lookup, XA_FLAGS_LOCK_IRQ);
 
 	wait = kzalloc(sizeof(*wait), GFP_KERNEL);
 	if (!wait)
