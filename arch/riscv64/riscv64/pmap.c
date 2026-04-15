@@ -1,4 +1,4 @@
-/*	$OpenBSD: pmap.c,v 1.48 2026/04/05 11:48:17 kettenis Exp $	*/
+/*	$OpenBSD: pmap.c,v 1.49 2026/04/15 21:15:08 kettenis Exp $	*/
 
 /*
  * Copyright (c) 2019-2020 Brian Bamsch <bbamsch@google.com>
@@ -1124,14 +1124,7 @@ pmap_growkernel(vaddr_t maxkvaddr)
 
 	for (i = VP_IDX1(pmap_maxkvaddr); i <= VP_IDX1(maxkvaddr - 1); i++) {
 		vp2 = vp1->vp[i];
-		if (vp2 == NULL) {
-			vp2 = pmap_kvp_alloc();
-			if (vp2 == NULL)
-				goto fail;
-			pmap_extract(pmap_kernel(), (vaddr_t)vp2, &pa);
-			vp1->vp[i] = vp2;
-			vp1->l1[i] = VP_Lx(pa);
-		}
+		KASSERT(vp2 != NULL);
 
 		if (i == VP_IDX1(pmap_maxkvaddr)) {
 			lb_idx2 = VP_IDX2(pmap_maxkvaddr);
@@ -1277,7 +1270,7 @@ pmap_bootstrap(long kvo, vaddr_t l1pt, vaddr_t kernelstart, vaddr_t kernelend,
 
 	/* allocate memory (in unit of pages) for l2 and l3 page table */
 	for (i = VP_IDX1(VM_MIN_KERNEL_ADDRESS);
-	    i <= VP_IDX1(pmap_maxkvaddr - 1);
+	    i <= VP_IDX1(VM_MAX_KERNEL_ADDRESS - 1);
 	    i++) {
 		mappings_allocated++;
 		pa = pmap_steal_avail(sizeof(struct pmapvp2), Lx_TABLE_ALIGN,
@@ -1285,6 +1278,16 @@ pmap_bootstrap(long kvo, vaddr_t l1pt, vaddr_t kernelstart, vaddr_t kernelend,
 		vp2 = (struct pmapvp2 *)PHYS_TO_DMAP(pa);
 		vp1->vp[i] = va;
 		vp1->l1[i] = VP_Lx(pa);
+
+		/*
+		 * We must fully populate the l1 page tables since
+		 * they get copied into the page tables for userland
+		 * processes.  But skip populating the l2 page tables
+		 * above pmap_maxkvaddr.  They will be populated by
+		 * pmap_growkernel() when necessary.
+		 */
+		if (i > VP_IDX1(pmap_maxkvaddr - 1))
+			continue;
 
 		if (i == VP_IDX1(VM_MIN_KERNEL_ADDRESS)) {
 			lb_idx2 = VP_IDX2(VM_MIN_KERNEL_ADDRESS);
