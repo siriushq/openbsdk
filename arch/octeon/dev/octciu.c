@@ -1,4 +1,4 @@
-/*	$OpenBSD: octciu.c,v 1.20 2026/04/04 09:00:20 kirill Exp $	*/
+/*	$OpenBSD: octciu.c,v 1.21 2026/04/16 15:50:58 kirill Exp $	*/
 
 /*
  * Copyright (c) 2000-2004 Opsycon AB  (www.opsycon.se)
@@ -452,7 +452,7 @@ octciu_next_irq(uint64_t *isr)
 	: "=r" (tmp) : "0" (tmp));
 
 	irq = 63u - tmp;
-	*isr &= ~(1u << irq);
+	*isr &= ~(1ULL << irq);
 	return irq;
 }
 
