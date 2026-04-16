@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_sysctl.c,v 1.488 2026/04/15 19:29:02 deraadt Exp $	*/
+/*	$OpenBSD: kern_sysctl.c,v 1.489 2026/04/16 07:03:15 dgl Exp $	*/
 /*	$NetBSD: kern_sysctl.c,v 1.17 1996/05/20 17:49:05 mrg Exp $	*/
 
 /*-
@@ -2763,6 +2763,7 @@ sysctl_sysvipc(int *name, u_int namelen, void *where, size_t *sizep)
 					    dssize);
 				else
 					memset(&semsi->semids[i], 0, dssize);
+				semsi->semids[i].sem_base = NULL;
 				break;
 #endif
 #ifdef SYSVSHM
