@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_sysctl.c,v 1.489 2026/04/16 07:03:15 dgl Exp $	*/
+/*	$OpenBSD: kern_sysctl.c,v 1.490 2026/04/16 07:09:41 deraadt Exp $	*/
 /*	$NetBSD: kern_sysctl.c,v 1.17 1996/05/20 17:49:05 mrg Exp $	*/
 
 /*-
@@ -2773,6 +2773,7 @@ sysctl_sysvipc(int *name, u_int namelen, void *where, size_t *sizep)
 					    dssize);
 				else
 					memset(&shmsi->shmids[i], 0, dssize);
+				shmsi->shmids[i].shm_internal = NULL;
 				break;
 #endif
 			}
