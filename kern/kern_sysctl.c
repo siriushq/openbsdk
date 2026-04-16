@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_sysctl.c,v 1.490 2026/04/16 07:09:41 deraadt Exp $	*/
+/*	$OpenBSD: kern_sysctl.c,v 1.491 2026/04/16 20:03:14 deraadt Exp $	*/
 /*	$NetBSD: kern_sysctl.c,v 1.17 1996/05/20 17:49:05 mrg Exp $	*/
 
 /*-
@@ -2537,7 +2537,7 @@ sysctl_proc_vmmap(int *name, u_int namelen, void *oldp, size_t *oldlenp,
 		return (error);
 
 	/* Allocate wired memory to not block. */
-	kve = malloc(oldlen, M_TEMP, M_WAITOK);
+	kve = malloc(oldlen, M_TEMP, M_WAITOK | M_ZERO);
 
 	/* Set the base address and read entries. */
 	kve[0].kve_start = start;
