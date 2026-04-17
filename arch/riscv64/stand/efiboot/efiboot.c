@@ -1,4 +1,4 @@
-/*	$OpenBSD: efiboot.c,v 1.13 2026/04/06 19:12:36 kettenis Exp $	*/
+/*	$OpenBSD: efiboot.c,v 1.14 2026/04/17 19:41:31 kettenis Exp $	*/
 
 /*
  * Copyright (c) 2015 YASUOKA Masahiko <yasuoka@yasuoka.net>
@@ -977,14 +977,56 @@ efi_memprobe_find(UINTN pages, UINTN align, EFI_PHYSICAL_ADDRESS *addr)
 	return EFI_OUT_OF_RESOURCES;
 }
 
+#define FW_PATH "/etc/firmware/dtb/"
+
+struct fdt_dtb {
+	const char *model;
+	const char *dtb;
+} fdt_dtb[] = {
+	/* Keep the list below sorted alphabetically */
+	{ "ky x1 orangepi-rv2 board",
+	  "spacemit/k1-orangepi-rv2.dtb" },
+	{ "Milk-V Jupiter",
+	  "spacemit/k1-milkv-jupiter.dtb" },
+	{ "Milk-V(M1) Jupiter",
+	  "spacemit/k1-milkv-jupiter.dtb" },
+	{ "spacemit k1-x deb1 board",
+	  "k1-bananapi-f3.dtb" },
+	{ "spacemit k1-x evb board",
+	  "spacemit/k1-milkv-jupiter.dtb" },
+};
+
 void *
 efi_fdt(void)
 {
+	void *node;
+	char *model = NULL;
+	size_t modellen;
+	char dtb[256];
+	int i;
+
 	/* 'mach dtb' has precedence */
 	if (fdt_override != NULL)
 		return fdt_override;
 
-	return fdt_sys;
+	node = fdt_find_node("/");
+	fdt_node_property(node, "model", &model);
+
+	/* Return system provided one */
+	if (model == NULL)
+		return fdt_sys;
+
+	for (i = 0; i < nitems(fdt_dtb); i++) {
+		modellen = strlen(fdt_dtb[i].model);
+		if (strncmp(model, fdt_dtb[i].model, modellen) == 0) {
+			snprintf(dtb, sizeof(dtb), "%s%s", FW_PATH,
+			    fdt_dtb[i].dtb);
+			fdt_load_override(dtb);
+			break;
+		}
+	}
+
+	return fdt_override ? fdt_override : fdt_sys;
 }
 
 int
