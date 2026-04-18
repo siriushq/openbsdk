@@ -1,4 +1,4 @@
-/*	$OpenBSD: dwpcie.c,v 1.59 2026/04/07 20:38:51 kettenis Exp $	*/
+/*	$OpenBSD: dwpcie.c,v 1.60 2026/04/18 17:06:22 kettenis Exp $	*/
 /*
  * Copyright (c) 2018 Mark Kettenis <kettenis@openbsd.org>
  *
@@ -1473,6 +1473,10 @@ dwpcie_k1_init(struct dwpcie_softc *sc)
 	val &= ~APMU_PCIE_APP_HOLD_PHY_RST;
 	val |= APMU_PCIE_LTSSM_EN;
 	regmap_write_4(apmu_rm, apmu[1] + APMU_PCIE_CLK_RES_CTRL, val);
+
+	val = HREAD4(sc, PCIE_LINK_WIDTH_SPEED_CTRL);
+	val |= PCIE_LINK_WIDTH_SPEED_CTRL_CHANGE;
+	HWRITE4(sc, PCIE_LINK_WIDTH_SPEED_CTRL, val);
 
 	/* Enable MSIs */
 	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
