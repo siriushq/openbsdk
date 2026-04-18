@@ -1,4 +1,4 @@
-/*	$OpenBSD: tcp_input.c,v 1.466 2026/04/16 15:45:58 claudio Exp $	*/
+/*	$OpenBSD: tcp_input.c,v 1.467 2026/04/18 11:16:29 claudio Exp $	*/
 /*	$NetBSD: tcp_input.c,v 1.23 1996/02/13 23:43:44 christos Exp $	*/
 
 /*
@@ -295,7 +295,7 @@ tcp_flush_queue(struct tcpcb *tp)
 {
 	struct socket *so = tp->t_inpcb->inp_socket;
 	struct tcpqent *q, *nq;
-	int flags = 0;
+	int flags;
 
 	/*
 	 * Present data to user, advancing rcv_nxt through
@@ -310,13 +310,13 @@ tcp_flush_queue(struct tcpcb *tp)
 		return (0);
 	do {
 		tp->rcv_nxt += q->tcpqe_tcp->th_reseqlen;
+		flags = q->tcpqe_tcp->th_flags & TH_FIN;
 
 		nq = TAILQ_NEXT(q, tcpqe_q);
 		TAILQ_REMOVE(&tp->t_segq, q, tcpqe_q);
-		if (so->so_rcv.sb_state & SS_CANTRCVMORE || flags)
+		if (so->so_rcv.sb_state & SS_CANTRCVMORE)
 			m_freem(q->tcpqe_m);
 		else {
-			flags = q->tcpqe_tcp->th_flags & TH_FIN;
 			mtx_enter(&so->so_rcv.sb_mtx);
 			sbappendstream(&so->so_rcv, q->tcpqe_m);
 			mtx_leave(&so->so_rcv.sb_mtx);
