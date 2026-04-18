@@ -1,4 +1,4 @@
-/*	$OpenBSD: pmap.c,v 1.128 2026/04/13 09:10:14 kettenis Exp $	*/
+/*	$OpenBSD: pmap.c,v 1.129 2026/04/18 17:17:03 kettenis Exp $	*/
 /*	$NetBSD: pmap.c,v 1.107 2001/08/31 16:47:41 eeh Exp $	*/
 /*
  * 
@@ -1281,6 +1281,17 @@ sun4u_bootstrap_cpu(paddr_t intstack)
 	/*
 	 * Establish the 64KB locked mapping for the interrupt stack.
 	 */
+
+#ifdef MULTIPROCESSOR
+	pa = intstack + (CPUINFO_VA - INTSTACK);
+	pa += offsetof(struct cpu_info, ci_self);
+	va = ldxa(pa, ASI_PHYS_CACHED);
+
+	data = SUN4U_TSB_DATA(0, PGSZ_64K, intstack, 1, 1, 1, 0, 1, 0);
+	data |= SUN4U_TLB_L;
+	prom_dtlb_load(index, data, va - (CPUINFO_VA - INTSTACK));
+	index--;
+#endif
 
 	data = SUN4U_TSB_DATA(0, PGSZ_64K, intstack, 1, 1, 1, 0, 1, 0);
 	data |= SUN4U_TLB_L;
