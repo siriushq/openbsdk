@@ -1,4 +1,4 @@
-/*	$OpenBSD: efiboot.c,v 1.70 2026/03/11 16:21:20 kettenis Exp $	*/
+/*	$OpenBSD: efiboot.c,v 1.71 2026/04/19 19:29:53 kettenis Exp $	*/
 
 /*
  * Copyright (c) 2015 YASUOKA Masahiko <yasuoka@yasuoka.net>
@@ -1202,6 +1202,7 @@ efi_fdt(void)
 			fdt_load_override(dtb);
 			/* TODO: find a better mechanism */
 			cnset(ttydev("fb0"));
+			break;
 		}
 	}
 
