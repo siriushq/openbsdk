@@ -1,4 +1,4 @@
-/*	$OpenBSD: octeon_intr.c,v 1.25 2019/03/17 05:25:06 visa Exp $	*/
+/*	$OpenBSD: octeon_intr.c,v 1.26 2026/04/20 21:18:36 kirill Exp $	*/
 
 /*
  * Copyright (c) 2000-2004 Opsycon AB  (www.opsycon.se)
@@ -59,6 +59,8 @@ octeon_intr_register(struct intr_controller *ic)
 		octeon_ic = ic;
 
 	ic->ic_phandle = OF_getpropint(ic->ic_node, "phandle", 0);
+	if (ic->ic_phandle == 0)
+		ic->ic_phandle = OF_getpropint(ic->ic_node, "linux,phandle", 0);
 	if (ic->ic_phandle == 0)
 		return;
 
