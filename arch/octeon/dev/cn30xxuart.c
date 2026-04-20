@@ -1,4 +1,4 @@
-/*	$OpenBSD: cn30xxuart.c,v 1.13 2022/04/06 18:59:27 naddy Exp $	*/
+/*	$OpenBSD: cn30xxuart.c,v 1.14 2026/04/20 21:20:38 kirill Exp $	*/
 
 /*
  * Copyright (c) 2001-2004 Opsycon AB  (www.opsycon.se / www.opsycon.com)
@@ -66,6 +66,7 @@ cons_decl(octuart);
 
 /* XXX: What is this used for? Removed from stand/boot/uart.c -r1.2 */
 static int delay_changed = 1;
+static int cn30xxuart_get_divisor(void);
 int cn30xxuart_delay(void);
 void cn30xxuart_wait_txhr_empty(int);
 
@@ -85,10 +86,16 @@ bus_space_t uartbus_tag = {
 void
 com_fdt_init_cons(void)
 {
+	int divisor;
+
 	comconsiot = &uartbus_tag;
 	comconsaddr = OCTEON_UART0_BASE;
 	comconsfreq = octeon_ioclock_speed();
-	comconsrate = B115200;
+	divisor = cn30xxuart_get_divisor();
+	if (divisor > 0)
+		comconsrate = comconsfreq / 16 / divisor;
+	else
+		comconsrate = TTYDEF_SPEED;
 	comconscflag = (TTYDEF_CFLAG & ~(CSIZE | PARENB)) | CS8;
 }
 
@@ -161,21 +168,30 @@ cn30xxuart_intr(void *arg)
  * Early console routines.
  */
 
-int
-cn30xxuart_delay(void)
+static int
+cn30xxuart_get_divisor(void)
 {
 	int divisor;
 	u_char lcr;
-	static int d = 0;
 
-	if (!delay_changed)
-		return d;
-	delay_changed = 0;
 	lcr = octeon_xkphys_read_8(MIO_UART0_LCR);
 	octeon_xkphys_write_8(MIO_UART0_LCR, lcr | LCR_DLAB);
 	divisor = octeon_xkphys_read_8(MIO_UART0_DLL) |
 		octeon_xkphys_read_8(MIO_UART0_DLH) << 8;
 	octeon_xkphys_write_8(MIO_UART0_LCR, lcr);
+
+	return divisor;
+}
+
+int
+cn30xxuart_delay(void)
+{
+	static int d = 0;
+
+	if (!delay_changed)
+		return d;
+	delay_changed = 0;
+	(void)cn30xxuart_get_divisor();
 
 	return 10; /* return an approx delay value */
 }
