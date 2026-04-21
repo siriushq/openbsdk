@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_cnmac.c,v 1.86 2024/05/20 23:13:33 jsg Exp $	*/
+/*	$OpenBSD: if_cnmac.c,v 1.87 2026/04/21 20:20:09 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -55,6 +55,11 @@
 #include <net/if_media.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
+#ifndef SMALL_KERNEL
+#include <netinet/tcp.h>
+#include <netinet/tcp_timer.h>
+#include <netinet/tcp_var.h>
+#endif
 
 #if NBPFILTER > 0
 #include <net/bpf.h>
@@ -307,6 +312,9 @@ cnmac_attach(struct device *parent, struct device *self, void *aux)
 	ifp->if_softc = sc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_xflags = IFXF_MPSAFE;
+#ifndef SMALL_KERNEL
+	ifp->if_xflags |= IFXF_LRO;
+#endif
 	ifp->if_ioctl = cnmac_ioctl;
 	ifp->if_qstart = cnmac_start;
 	ifp->if_watchdog = cnmac_watchdog;
@@ -315,6 +323,9 @@ cnmac_attach(struct device *parent, struct device *self, void *aux)
 
 	ifp->if_capabilities = IFCAP_VLAN_MTU | IFCAP_CSUM_TCPv4 |
 	    IFCAP_CSUM_UDPv4 | IFCAP_CSUM_TCPv6 | IFCAP_CSUM_UDPv6;
+#ifndef SMALL_KERNEL
+	ifp->if_capabilities |= IFCAP_LRO;
+#endif
 
 	cn30xxgmx_set_filter(sc->sc_gmx_port);
 
@@ -1246,7 +1257,21 @@ cnmac_recv(struct cnmac_softc *sc, uint64_t *work, struct mbuf_list *ml)
 			    M_TCP_CSUM_IN_OK | M_UDP_CSUM_IN_OK;
 	}
 
-	ml_enqueue(ml, m);
+#ifndef SMALL_KERNEL
+	if (ISSET(ifp->if_xflags, IFXF_LRO) &&
+	    !ISSET(word2, PIP_WQE_WORD2_IP_NI) &&
+	    ISSET(word2, PIP_WQE_WORD2_IP_TU) &&
+	    !ISSET(word2, PIP_WQE_WORD2_IP_FR | PIP_WQE_WORD2_IP_LE)) {
+		struct ether_extracted ext;
+
+		ether_extract_headers(m, &ext);
+		if (ext.tcp != NULL)
+			tcp_softlro_glue(ml, m, ifp);
+		else
+			ml_enqueue(ml, m);
+	} else
+#endif
+		ml_enqueue(ml, m);
 
 	return nmbuf;
 
