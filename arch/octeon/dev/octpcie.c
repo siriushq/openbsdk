@@ -1,4 +1,4 @@
-/*	$OpenBSD: octpcie.c,v 1.2 2019/09/22 04:43:24 visa Exp $	*/
+/*	$OpenBSD: octpcie.c,v 1.3 2026/04/21 19:43:47 kirill Exp $	*/
 
 /*
  * Copyright (c) 2019 Visa Hankala
@@ -723,18 +723,18 @@ octpcie_bus_maxdevs(void *v, int busno)
 pcitag_t
 octpcie_make_tag(void *unused, int b, int d, int f)
 {
-	return (b << 16) | (d << 11) | (f << 8);
+	return (b << 20) | (d << 15) | (f << 12);
 }
 
 void
 octpcie_decompose_tag(void *unused, pcitag_t tag, int *bp, int *dp, int *fp)
 {
 	if (bp != NULL)
-		*bp = (tag >> 16) & 0xff;
+		*bp = (tag >> 20) & 0xff;
 	if (dp != NULL)
-		*dp = (tag >> 11) & 0x1f;
+		*dp = (tag >> 15) & 0x1f;
 	if (fp != NULL)
-		*fp = (tag >> 8) & 0x7;
+		*fp = (tag >> 12) & 0x7;
 }
 
 int
