@@ -1,4 +1,4 @@
-/*	$OpenBSD: systm.h,v 1.177 2025/07/28 05:08:35 dlg Exp $	*/
+/*	$OpenBSD: systm.h,v 1.178 2026/04/21 18:18:11 deraadt Exp $	*/
 /*	$NetBSD: systm.h,v 1.50 1996/06/09 04:55:09 briggs Exp $	*/
 
 /*-
@@ -149,7 +149,6 @@ extern void (*v_putc)(int); /* Virtual console putc routine */
  */
 int	nullop(void *);
 int	enodev(void);
-int	enosys(void);
 int	enoioctl(void);
 int	enxio(void);
 int	eopnotsupp(void *);

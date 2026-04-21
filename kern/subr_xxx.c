@@ -1,4 +1,4 @@
-/*	$OpenBSD: subr_xxx.c,v 1.18 2025/06/25 20:29:29 miod Exp $	*/
+/*	$OpenBSD: subr_xxx.c,v 1.19 2026/04/21 18:18:11 deraadt Exp $	*/
 /*	$NetBSD: subr_xxx.c,v 1.10 1996/02/04 02:16:51 christos Exp $	*/
 
 /*
@@ -70,18 +70,6 @@ enoioctl(void)
 {
 
 	return (ENOTTY);
-}
-
-/*
- * Unsupported system function.
- * This is used for an otherwise-reasonable operation
- * that is not supported by the current system binary.
- */
-int
-enosys(void)
-{
-
-	return (ENOSYS);
 }
 
 /*
