@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_ix.c,v 1.224 2026/04/22 22:09:18 dlg Exp $	*/
+/*	$OpenBSD: if_ix.c,v 1.225 2026/04/22 22:12:49 dlg Exp $	*/
 
 /******************************************************************************
 
@@ -2292,7 +2292,7 @@ ixgbe_allocate_transmit_buffers(struct ix_txring *txr)
 	for (i = 0; i < sc->num_tx_desc; i++) {
 		txbuf = &txr->tx_buffers[i];
 		error = bus_dmamap_create(txr->txdma.dma_tag, MAXMCLBYTES,
-			    sc->num_segs, PAGE_SIZE, 0,
+			    sc->num_segs, 16 * 1024, 0,
 			    BUS_DMA_NOWAIT | BUS_DMA_64BIT, &txbuf->map);
 
 		if (error != 0) {
