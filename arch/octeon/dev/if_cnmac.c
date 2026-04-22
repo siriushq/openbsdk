@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_cnmac.c,v 1.87 2026/04/21 20:20:09 kirill Exp $	*/
+/*	$OpenBSD: if_cnmac.c,v 1.88 2026/04/22 19:11:04 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -482,6 +482,19 @@ cnmac_mediainit(struct cnmac_softc *sc)
 	ifmedia_init(&sc->sc_mii.mii_media, 0, cnmac_mediachange,
 	    cnmac_mediastatus);
 
+	if (sc->sc_gmx_port->sc_port_1000x) {
+		ifmedia_add(&sc->sc_mii.mii_media,
+		    IFM_ETHER | IFM_1000_T | IFM_FDX, 0, NULL);
+		ifmedia_set(&sc->sc_mii.mii_media,
+		    IFM_ETHER | IFM_1000_T | IFM_FDX);
+		sc->sc_mii.mii_media_status = IFM_AVALID | IFM_ACTIVE;
+		sc->sc_mii.mii_media_active =
+		    IFM_ETHER | IFM_1000_T | IFM_FDX;
+		ifp->if_baudrate = IF_Gbps(1);
+		ifp->if_link_state = LINK_STATE_FULL_DUPLEX;
+		return 0;
+	}
+
 	mii_attach(&sc->sc_dev, &sc->sc_mii,
 	    0xffffffff, sc->sc_phy_addr, MII_OFFSET_ANY, MIIF_DOPAUSE);
 
@@ -503,6 +516,14 @@ cnmac_mediastatus(struct ifnet *ifp, struct ifmediareq *ifmr)
 {
 	struct cnmac_softc *sc = ifp->if_softc;
 
+	if (sc->sc_gmx_port->sc_port_1000x) {
+		ifmr->ifm_status = sc->sc_mii.mii_media_status;
+		ifmr->ifm_active = (sc->sc_mii.mii_media_active &
+		    ~IFM_ETH_FMASK) |
+		    sc->sc_gmx_port->sc_port_flowflags;
+		return;
+	}
+
 	mii_pollstat(&sc->sc_mii);
 	ifmr->ifm_status = sc->sc_mii.mii_media_status;
 	ifmr->ifm_active = sc->sc_mii.mii_media_active;
@@ -514,6 +535,9 @@ int
 cnmac_mediachange(struct ifnet *ifp)
 {
 	struct cnmac_softc *sc = ifp->if_softc;
+
+	if (sc->sc_gmx_port->sc_port_1000x)
+		return 0;
 
 	if ((ifp->if_flags & IFF_UP) == 0)
 		return 0;

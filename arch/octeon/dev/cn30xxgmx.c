@@ -1,4 +1,4 @@
-/*	$OpenBSD: cn30xxgmx.c,v 1.55 2024/07/08 08:07:45 landry Exp $	*/
+/*	$OpenBSD: cn30xxgmx.c,v 1.56 2026/04/22 19:11:04 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -169,19 +169,61 @@ cn30xxgmx_match(struct device *parent, void *match, void *aux)
 }
 
 int
-cn30xxgmx_get_phy_phandle(int interface, int port)
+cn30xxgmx_get_phy_phandle(int interface, int port, int *port_1000x,
+    int *disable_an)
 {
 	char name[64];
 	int node;
 	int phandle = 0;
 
+	if (port_1000x != NULL)
+		*port_1000x = 0;
+	if (disable_an != NULL)
+		*disable_an = 0;
+
 	snprintf(name, sizeof(name),
 	    "/soc/pip@11800a0000000/interface@%x/ethernet@%x",
 	    interface, port);
 	node = OF_finddevice(name);
-	if (node != - 1)
+	if (node != -1) {
 		phandle = OF_getpropint(node, "phy-handle", 0);
+		if (port_1000x != NULL) {
+			*port_1000x = OF_getproplen(node,
+			    "cavium,sgmii-mac-1000x-mode") >= 0;
+		}
+		if (disable_an != NULL) {
+			*disable_an = OF_getproplen(node,
+			    "cavium,disable-autonegotiation") >= 0;
+		}
+	}
 	return phandle;
+}
+
+void
+cn30xxgmx_init_cn71xx(struct cn30xxgmx_softc *sc)
+{
+	char name[64];
+	int child, node, reg;
+
+	snprintf(name, sizeof(name),
+	    "/soc/pip@11800a0000000/interface@%x", sc->sc_unitno);
+	node = OF_finddevice(name);
+	if (node == -1)
+		return;
+
+	for (child = OF_child(node); child != 0; child = OF_peer(child)) {
+		if (!OF_is_compatible(child, "cavium,octeon-3860-pip-port"))
+			continue;
+		if (OF_getproplen(child, "cavium,sgmii-mac-1000x-mode") < 0)
+			continue;
+		reg = OF_getpropint(child, "reg", -1);
+		if (reg < 0 || reg >= nitems(sc->sc_port_types))
+			continue;
+
+		sc->sc_port_types[reg] = GMX_SGMII_PORT;
+		if (sc->sc_nports < reg + 1)
+			sc->sc_nports = reg + 1;
+	}
 }
 
 void
@@ -193,6 +235,7 @@ cn30xxgmx_attach(struct device *parent, struct device *self, void *aux)
 	struct cn30xxgmx_softc *sc = (void *)self;
 	struct cn30xxsmi_softc *smi;
 	int i;
+	int phandle;
 	int phy_addr;
 	int port;
 	int status;
@@ -224,15 +267,20 @@ cn30xxgmx_attach(struct device *parent, struct device *self, void *aux)
 	printf("\n");
 
 	for (i = 0; i < sc->sc_nports; i++) {
+		port_sc = &sc->sc_ports[i];
 		if (sc->sc_port_types[i] == GMX_AGL_PORT)
 			port = 24;
 		else
 			port = GMX_PORT_NUM(sc->sc_unitno, i);
-		if (cn30xxsmi_get_phy(cn30xxgmx_get_phy_phandle(sc->sc_unitno,
-		    i), port, &smi, &phy_addr))
+		phandle = cn30xxgmx_get_phy_phandle(sc->sc_unitno, i,
+		    &port_sc->sc_port_1000x,
+		    &port_sc->sc_port_disable_an);
+		smi = NULL;
+		phy_addr = -1;
+		if (!(port_sc->sc_port_1000x && phandle == 0) &&
+		    cn30xxsmi_get_phy(phandle, port, &smi, &phy_addr))
 			continue;
 
-		port_sc = &sc->sc_ports[i];
 		port_sc->sc_port_gmx = sc;
 		port_sc->sc_port_no = port;
 		port_sc->sc_port_type = sc->sc_port_types[i];
@@ -420,6 +468,10 @@ cn30xxgmx_init(struct cn30xxgmx_softc *sc)
 			}
 			break;
 		}
+
+		cn30xxgmx_init_cn71xx(sc);
+		if (sc->sc_nports != 0)
+			break;
 
 		inf_mode = bus_space_read_8(sc->sc_regt, sc->sc_regh,
 		    GMX0_INF_MODE);
@@ -1341,6 +1393,17 @@ cn30xxgmx_sgmii_enable(struct cn30xxgmx_port_softc *sc, int enable)
 		return 1;
 	}
 
+	if (sc->sc_port_disable_an) {
+		CLR(ctl_reg, PCS_MR_CONTROL_AN_EN);
+		CLR(ctl_reg, PCS_MR_CONTROL_RST_AN);
+		CLR(ctl_reg, PCS_MR_CONTROL_PWR_DN);
+		CLR(ctl_reg, PCS_MR_CONTROL_SPDLSB);
+		SET(ctl_reg, PCS_MR_CONTROL_SPDMSB);
+		SET(ctl_reg, PCS_MR_CONTROL_DUPLEX);
+		PCS_WRITE_8(sc, PCS_MR_CONTROL, ctl_reg);
+		return 0;
+	}
+
 	/* Start a new SGMII autonegotiation. */
 	SET(ctl_reg, PCS_MR_CONTROL_AN_EN);
 	SET(ctl_reg, PCS_MR_CONTROL_RST_AN);
@@ -1382,6 +1445,8 @@ cn30xxgmx_sgmii_speed(struct cn30xxgmx_port_softc *sc)
 
 	misc_ctl = PCS_READ_8(sc, PCS_MISC_CTL);
 	CLR(misc_ctl, PCS_MISC_CTL_SAMP_PT);
+	if (sc->sc_port_disable_an)
+		SET(misc_ctl, PCS_MISC_CTL_AN_OVRD);
 
 	/* Disable the GMX port if the link is down. */
 	if (cn30xxgmx_link_status(sc))
