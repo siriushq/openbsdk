@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_ix.c,v 1.223 2026/02/26 23:38:10 bluhm Exp $	*/
+/*	$OpenBSD: if_ix.c,v 1.224 2026/04/22 22:09:18 dlg Exp $	*/
 
 /******************************************************************************
 
@@ -3061,8 +3061,13 @@ ixgbe_initialize_rss_mapping(struct ix_softc *sc)
 	}
 
 	/* Now fill our hash function seeds */
-	for (i = 0; i < 10; i++)
-		IXGBE_WRITE_REG(hw, IXGBE_RSSRK(i), rss_key[i]);
+	for (i = 0; i < nitems(rss_key); i++) {
+		/*
+		 * twist the words so the rss key will be handled
+		 * as bytes regardless of the hosts endianness.
+		 */
+		IXGBE_WRITE_REG(hw, IXGBE_RSSRK(i), letoh32(rss_key[i]));
+	}
 
 	/*
 	 * Disable UDP - IP fragments aren't currently being handled
