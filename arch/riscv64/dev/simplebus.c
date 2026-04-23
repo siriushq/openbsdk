@@ -1,4 +1,4 @@
-/*	$OpenBSD: simplebus.c,v 1.8 2025/11/25 21:52:47 kettenis Exp $	*/
+/*	$OpenBSD: simplebus.c,v 1.9 2026/04/23 19:51:37 kettenis Exp $	*/
 
 /*
  * Copyright (c) 2016 Patrick Wildt <patrick@blueri.se>
@@ -34,7 +34,7 @@ void simplebus_attach_node(struct device *, int);
 int simplebus_bs_map(bus_space_tag_t, bus_addr_t, bus_size_t, int,
     bus_space_handle_t *);
 int simplebus_dmamap_load_buffer(bus_dma_tag_t, bus_dmamap_t, void *,
-    bus_size_t, struct proc *, int, paddr_t *, int *, int);
+    bus_size_t, struct proc *, int, paddr_t *, int *, int *, int *, int);
 
 const struct cfattach simplebus_ca = {
 	sizeof(struct simplebus_softc), simplebus_match, simplebus_attach
@@ -317,7 +317,7 @@ simplebus_bs_map(bus_space_tag_t t, bus_addr_t bpa, bus_size_t size,
 int
 simplebus_dmamap_load_buffer(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
     bus_size_t buflen, struct proc *p, int flags, paddr_t *lastaddrp,
-    int *segp, int first)
+    int *segp, int *usedp, int *lastbouncep, int first)
 {
 	struct simplebus_softc *sc = t->_cookie;
 	int rlen, rone, seg;
@@ -325,7 +325,7 @@ simplebus_dmamap_load_buffer(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
 	int error;
 
 	error = sc->sc_dmat->_dmamap_load_buffer(sc->sc_dmat, map, buf, buflen,
-	    p, flags, lastaddrp, segp, first);
+	    p, flags, lastaddrp, segp, usedp, lastbouncep, first);
 	if (error)
 		return error;
 
