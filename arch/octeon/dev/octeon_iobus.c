@@ -1,4 +1,4 @@
-/*	$OpenBSD: octeon_iobus.c,v 1.28 2024/05/20 23:17:10 jsg Exp $ */
+/*	$OpenBSD: octeon_iobus.c,v 1.29 2026/04/27 16:39:50 kirill Exp $ */
 
 /*
  * Copyright (c) 2000-2004 Opsycon AB  (www.opsycon.se)
@@ -231,6 +231,7 @@ iobussearch(struct device *parent, void *v, void *aux)
 	aa.aa_addr = cf->cf_loc[0];
 	aa.aa_irq  = cf->cf_loc[1];
 	aa.aa_unitno = cf->cf_unit;
+	aa.aa_node = 0;
 
 	/* No address specified, try to look it up. */
 	if (aa.aa_addr == -1) {

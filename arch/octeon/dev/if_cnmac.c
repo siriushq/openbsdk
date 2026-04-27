@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_cnmac.c,v 1.88 2026/04/22 19:11:04 kirill Exp $	*/
+/*	$OpenBSD: if_cnmac.c,v 1.89 2026/04/27 16:39:50 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -50,6 +50,8 @@
 #include <sys/syslog.h>
 #include <sys/endian.h>
 #include <sys/atomic.h>
+
+#include <dev/ofw/openfirm.h>
 
 #include <net/if.h>
 #include <net/if_media.h>
@@ -120,6 +122,7 @@ void	cnmac_ipd_init(struct cnmac_softc *);
 void	cnmac_pko_init(struct cnmac_softc *);
 
 void	cnmac_board_mac_addr(uint8_t *);
+int	cnmac_port_mac_addr(int, uint8_t *);
 
 int	cnmac_mii_readreg(struct device *, int, int);
 void	cnmac_mii_writereg(struct device *, int, int, int);
@@ -277,7 +280,8 @@ cnmac_attach(struct device *parent, struct device *self, void *aux)
 	 */
 	sc->sc_ip_offset = 0/* XXX */;
 
-	cnmac_board_mac_addr(sc->sc_arpcom.ac_enaddr);
+	if (cnmac_port_mac_addr(ga->ga_node, sc->sc_arpcom.ac_enaddr) != 0)
+		cnmac_board_mac_addr(sc->sc_arpcom.ac_enaddr);
 	printf(", address %s\n", ether_sprintf(sc->sc_arpcom.ac_enaddr));
 
 	ml_init(&sc->sc_sendq);
@@ -386,6 +390,17 @@ cnmac_pko_init(struct cnmac_softc *sc)
 }
 
 /* ---- XXX */
+
+int
+cnmac_port_mac_addr(int node, uint8_t *enaddr)
+{
+	if (node == 0)
+		return 1;
+	if (OF_getprop(node, "local-mac-address", enaddr, ETHER_ADDR_LEN) ==
+	    ETHER_ADDR_LEN)
+		return 0;
+	return 1;
+}
 
 void
 cnmac_board_mac_addr(uint8_t *enaddr)

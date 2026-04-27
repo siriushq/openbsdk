@@ -1,4 +1,4 @@
-/*	$OpenBSD: cn30xxgmx.c,v 1.56 2026/04/22 19:11:04 kirill Exp $	*/
+/*	$OpenBSD: cn30xxgmx.c,v 1.57 2026/04/27 16:39:50 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -87,6 +87,7 @@ struct cn30xxgmx_port_ops {
 int	cn30xxgmx_match(struct device *, void *, void *);
 void	cn30xxgmx_attach(struct device *, struct device *, void *);
 int	cn30xxgmx_print(void *, const char *);
+int	cn30xxgmx_get_port_node(int, int);
 void	cn30xxgmx_init(struct cn30xxgmx_softc *);
 int	cn30xxgmx_rx_frm_ctl_xable(struct cn30xxgmx_port_softc *,
 	    uint64_t, int);
@@ -169,6 +170,22 @@ cn30xxgmx_match(struct device *parent, void *match, void *aux)
 }
 
 int
+cn30xxgmx_get_port_node(int node, int port)
+{
+	int child;
+
+	if (node == 0)
+		return 0;
+
+	for (child = OF_child(node); child != 0; child = OF_peer(child)) {
+		if (OF_getpropint(child, "reg", (uint32_t)-1) == port)
+			return child;
+	}
+
+	return 0;
+}
+
+int
 cn30xxgmx_get_phy_phandle(int interface, int port, int *port_1000x,
     int *disable_an)
 {
@@ -235,6 +252,7 @@ cn30xxgmx_attach(struct device *parent, struct device *self, void *aux)
 	struct cn30xxgmx_softc *sc = (void *)self;
 	struct cn30xxsmi_softc *smi;
 	int i;
+	int node;
 	int phandle;
 	int phy_addr;
 	int port;
@@ -268,6 +286,7 @@ cn30xxgmx_attach(struct device *parent, struct device *self, void *aux)
 
 	for (i = 0; i < sc->sc_nports; i++) {
 		port_sc = &sc->sc_ports[i];
+		node = cn30xxgmx_get_port_node(aa->aa_node, i);
 		if (sc->sc_port_types[i] == GMX_AGL_PORT)
 			port = 24;
 		else
@@ -330,6 +349,7 @@ cn30xxgmx_attach(struct device *parent, struct device *self, void *aux)
 		gmx_aa.ga_name = "cnmac";
 		gmx_aa.ga_portno = port_sc->sc_port_no;
 		gmx_aa.ga_port_type = sc->sc_port_types[i];
+		gmx_aa.ga_node = node;
 		gmx_aa.ga_gmx = sc;
 		gmx_aa.ga_gmx_port = port_sc;
 		gmx_aa.ga_phy_addr = phy_addr;

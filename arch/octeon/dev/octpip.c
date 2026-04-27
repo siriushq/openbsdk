@@ -1,4 +1,4 @@
-/*	$OpenBSD: octpip.c,v 1.3 2020/09/08 13:54:48 visa Exp $	*/
+/*	$OpenBSD: octpip.c,v 1.4 2026/04/27 16:39:50 kirill Exp $	*/
 
 /*
  * Copyright (c) 2019 Visa Hankala
@@ -82,6 +82,7 @@ octpip_attach(struct device *parent, struct device *self, void *aux)
 		iaa.aa_addr = addr;
 		iaa.aa_irq = -1;
 		iaa.aa_unitno = ifindex;
+		iaa.aa_node = node;
 		config_found(self, &iaa, octpip_print);
 	}
 }

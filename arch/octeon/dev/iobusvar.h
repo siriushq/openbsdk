@@ -1,4 +1,4 @@
-/*	$OpenBSD: iobusvar.h,v 1.5 2024/05/20 23:20:29 jsg Exp $	*/
+/*	$OpenBSD: iobusvar.h,v 1.6 2026/04/27 16:39:50 kirill Exp $	*/
 
 /*
  * Copyright (c) 2001-2003 Opsycon AB  (www.opsycon.se / www.opsycon.com)
@@ -36,6 +36,7 @@ extern bus_space_t iobus_tag;
 struct iobus_attach_args {
 	char		*aa_name;
 	int		aa_unitno;
+	int		aa_node;
 
 	bus_addr_t	aa_addr;
 	int		aa_irq;
