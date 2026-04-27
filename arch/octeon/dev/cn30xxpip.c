@@ -1,4 +1,4 @@
-/*	$OpenBSD: cn30xxpip.c,v 1.11 2022/12/28 01:39:21 yasuoka Exp $	*/
+/*	$OpenBSD: cn30xxpip.c,v 1.12 2026/04/27 16:54:49 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -57,6 +57,7 @@ cn30xxpip_init(struct cn30xxpip_attach_args *aa,
 	sc->sc_regt = aa->aa_regt;
 	sc->sc_tag_type = aa->aa_tag_type;
 	sc->sc_receive_group = aa->aa_receive_group;
+	sc->sc_receive_group_order = aa->aa_receive_group_order;
 	sc->sc_ip_offset = aa->aa_ip_offset;
 
 	status = bus_space_map(sc->sc_regt, PIP_BASE, PIP_SIZE, 0,
@@ -88,6 +89,7 @@ cn30xxpip_port_config(struct cn30xxpip_softc *sc)
 	uint64_t prt_cfg;
 	uint64_t prt_tag;
 	uint64_t ip_offset;
+	uint64_t group_mask;
 
 	/*
 	 * Process the headers and place the IP header in the work queue
@@ -108,22 +110,30 @@ cn30xxpip_port_config(struct cn30xxpip_softc *sc)
 	/* SKIP=0 */
 
 	prt_tag = 0;
-	SET(prt_tag, PIP_PRT_TAGN_INC_PRT);
-	CLR(prt_tag, PIP_PRT_TAGN_IP6_DPRT);
-	CLR(prt_tag, PIP_PRT_TAGN_IP4_DPRT);
-	CLR(prt_tag, PIP_PRT_TAGN_IP6_SPRT);
-	CLR(prt_tag, PIP_PRT_TAGN_IP4_SPRT);
+	CLR(prt_tag, PIP_PRT_TAGN_INC_VLAN);
+	CLR(prt_tag, PIP_PRT_TAGN_INC_PRT);
+	SET(prt_tag, PIP_PRT_TAGN_IP6_DPRT);
+	SET(prt_tag, PIP_PRT_TAGN_IP4_DPRT);
+	SET(prt_tag, PIP_PRT_TAGN_IP6_SPRT);
+	SET(prt_tag, PIP_PRT_TAGN_IP4_SPRT);
 	CLR(prt_tag, PIP_PRT_TAGN_IP6_NXTH);
 	CLR(prt_tag, PIP_PRT_TAGN_IP4_PCTL);
-	CLR(prt_tag, PIP_PRT_TAGN_IP6_DST);
-	CLR(prt_tag, PIP_PRT_TAGN_IP4_SRC);
-	CLR(prt_tag, PIP_PRT_TAGN_IP6_SRC);
-	CLR(prt_tag, PIP_PRT_TAGN_IP4_DST);
+	SET(prt_tag, PIP_PRT_TAGN_IP6_DST);
+	SET(prt_tag, PIP_PRT_TAGN_IP4_SRC);
+	SET(prt_tag, PIP_PRT_TAGN_IP6_SRC);
+	SET(prt_tag, PIP_PRT_TAGN_IP4_DST);
 	SET(prt_tag, PIP_PRT_TAGN_TCP6_TAG_ORDERED);
 	SET(prt_tag, PIP_PRT_TAGN_TCP4_TAG_ORDERED);
 	SET(prt_tag, PIP_PRT_TAGN_IP6_TAG_ORDERED);
 	SET(prt_tag, PIP_PRT_TAGN_IP4_TAG_ORDERED);
 	SET(prt_tag, PIP_PRT_TAGN_NON_TAG_ORDERED);
+	if (sc->sc_receive_group_order > 0) {
+		group_mask = ~((1U << sc->sc_receive_group_order) - 1U);
+		SET(prt_tag, ((uint64_t)sc->sc_receive_group << 36) &
+		    PIP_PRT_TAGN_GRPTAGBASE);
+		SET(prt_tag, (group_mask << 32) & PIP_PRT_TAGN_GRPTAGMASK);
+		SET(prt_tag, PIP_PRT_TAGN_GRPTAG);
+	}
 	SET(prt_tag, sc->sc_receive_group & PIP_PRT_TAGN_GRP);
 
 	ip_offset = 0;

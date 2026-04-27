@@ -1,4 +1,4 @@
-/*	$OpenBSD: cn30xxpipvar.h,v 1.6 2024/05/20 23:13:33 jsg Exp $	*/
+/*	$OpenBSD: cn30xxpipvar.h,v 1.7 2026/04/27 16:54:49 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -41,6 +41,7 @@ struct cn30xxpip_softc {
 	bus_space_handle_t	sc_regh_stat;
 	int			sc_tag_type;
 	int			sc_receive_group;
+	int			sc_receive_group_order;
 	size_t			sc_ip_offset;
 };
 
@@ -50,6 +51,7 @@ struct cn30xxpip_attach_args {
 	bus_space_tag_t		aa_regt;
 	int			aa_tag_type;
 	int			aa_receive_group;
+	int			aa_receive_group_order;
 	size_t			aa_ip_offset;
 };
 

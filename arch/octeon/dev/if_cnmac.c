@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_cnmac.c,v 1.89 2026/04/27 16:39:50 kirill Exp $	*/
+/*	$OpenBSD: if_cnmac.c,v 1.90 2026/04/27 16:54:49 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -162,6 +162,9 @@ int	cnmac_send(struct cnmac_softc *, struct mbuf *);
 int	cnmac_reset(struct cnmac_softc *);
 int	cnmac_configure(struct cnmac_softc *);
 int	cnmac_configure_common(struct cnmac_softc *);
+void	cnmac_rx_groups_init(void);
+void	cnmac_rx_groups_config(struct cn30xxpow_softc *);
+void	cnmac_rx_groups_barrier(void);
 
 void	cnmac_free_task(void *);
 void	cnmac_tick_free(void *arg);
@@ -190,6 +193,15 @@ const struct cfattach cnmac_ca = {
 
 struct cfdriver cnmac_cd = { NULL, "cnmac", DV_IFNET };
 
+#define CNMAC_PIP_PORT_MAX	64
+
+struct cnmac_rx_group {
+	unsigned int		crg_group;
+	void			*crg_ih;
+	char			crg_name[IFNAMSIZ];
+	struct mbuf_list	crg_rx_batch[CNMAC_PIP_PORT_MAX];
+} __aligned(CACHELINESIZE);
+
 /* ---- buffer management */
 
 const struct cnmac_pool_param {
@@ -212,7 +224,10 @@ uint64_t cnmac_mac_addr = 0;
 uint32_t cnmac_mac_addr_offset = 0;
 
 int	cnmac_mbufs_to_alloc;
-int	cnmac_npowgroups = 0;
+unsigned int cnmac_nrxgroups = 0;
+unsigned int cnmac_nrxgroups_order = 0;
+struct cnmac_softc *cnmac_port_softc[CNMAC_PIP_PORT_MAX];
+struct cnmac_rx_group cnmac_rx_groups[OCTEON_POW_GROUP_MAX];
 
 void
 cnmac_buf_init(struct cnmac_softc *sc)
@@ -231,6 +246,50 @@ cnmac_buf_init(struct cnmac_softc *sc)
 		cn30xxfpa_buf_init(pp->poolno, pp->size, pp->nelems, &fb);
 		cnmac_pools[pp->poolno] = fb;
 	}
+}
+
+void
+cnmac_rx_groups_init(void)
+{
+	struct cnmac_rx_group *crg;
+	unsigned int i, target;
+
+	if (cnmac_nrxgroups != 0)
+		return;
+
+	target = min(softnet_count(), OCTEON_POW_GROUP_MAX);
+	cnmac_nrxgroups_order = fls(target) - 1;
+	cnmac_nrxgroups = 1U << cnmac_nrxgroups_order;
+
+	for (i = 0; i < cnmac_nrxgroups; i++) {
+		crg = &cnmac_rx_groups[i];
+		crg->crg_group = i;
+		snprintf(crg->crg_name, sizeof(crg->crg_name),
+		    "cnmacrx%u", i);
+		crg->crg_ih = octeon_intr_establish(POW_WORKQ_IRQ(i),
+		    IPL_NET | IPL_MPSAFE, cnmac_intr, crg, crg->crg_name);
+		if (crg->crg_ih == NULL)
+			panic("%s: could not set up interrupt",
+			    crg->crg_name);
+	}
+}
+
+void
+cnmac_rx_groups_config(struct cn30xxpow_softc *pow)
+{
+	unsigned int i;
+
+	for (i = 0; i < cnmac_nrxgroups; i++)
+		cn30xxpow_config(pow, i);
+}
+
+void
+cnmac_rx_groups_barrier(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < cnmac_nrxgroups; i++)
+		intr_barrier(cnmac_rx_groups[i].crg_ih);
 }
 
 /* ---- autoconf */
@@ -254,11 +313,6 @@ cnmac_attach(struct device *parent, struct device *self, void *aux)
 	struct cn30xxgmx_attach_args *ga = aux;
 	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
 
-	if (cnmac_npowgroups >= OCTEON_POW_GROUP_MAX) {
-		printf(": out of POW groups\n");
-		return;
-	}
-
 	atomic_add_int(&cnmac_mbufs_to_alloc,
 	    cnmac_mbuf_alloc(CNMAC_MBUFS_PER_PORT));
 
@@ -270,7 +324,6 @@ cnmac_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_gmx_port = ga->ga_gmx_port;
 	sc->sc_smi = ga->ga_smi;
 	sc->sc_phy_addr = ga->ga_phy_addr;
-	sc->sc_powgroup = cnmac_npowgroups++;
 
 	sc->sc_init_flag = 0;
 
@@ -291,6 +344,10 @@ cnmac_attach(struct device *parent, struct device *self, void *aux)
 	task_set(&sc->sc_free_task, cnmac_free_task, sc);
 	timeout_set(&sc->sc_tick_misc_ch, cnmac_tick_misc, sc);
 	timeout_set(&sc->sc_tick_free_ch, cnmac_tick_free, sc);
+	cnmac_rx_groups_init();
+	KASSERT(sc->sc_port < nitems(cnmac_port_softc));
+	KASSERT(cnmac_port_softc[sc->sc_port] == NULL);
+	cnmac_port_softc[sc->sc_port] = sc;
 
 	cn30xxfau_op_init(&sc->sc_fau_done,
 	    OCTEON_CVMSEG_ETHER_OFFSET(sc->sc_dev.dv_unit, csm_ether_fau_done),
@@ -335,17 +392,13 @@ cnmac_attach(struct device *parent, struct device *self, void *aux)
 
 	if_attach(ifp);
 	ether_ifattach(ifp);
+	if_attach_iqueues(ifp, cnmac_nrxgroups);
 
 	cnmac_buf_init(sc);
 
 #if NKSTAT > 0
 	cnmac_kstat_attach(sc);
 #endif
-
-	sc->sc_ih = octeon_intr_establish(POW_WORKQ_IRQ(sc->sc_powgroup),
-	    IPL_NET | IPL_MPSAFE, cnmac_intr, sc, sc->sc_dev.dv_xname);
-	if (sc->sc_ih == NULL)
-		panic("%s: could not set up interrupt", sc->sc_dev.dv_xname);
 }
 
 /* ---- submodules */
@@ -358,7 +411,8 @@ cnmac_pip_init(struct cnmac_softc *sc)
 	pip_aa.aa_port = sc->sc_port;
 	pip_aa.aa_regt = sc->sc_regt;
 	pip_aa.aa_tag_type = POW_TAG_TYPE_ORDERED/* XXX */;
-	pip_aa.aa_receive_group = sc->sc_powgroup;
+	pip_aa.aa_receive_group = 0;
+	pip_aa.aa_receive_group_order = cnmac_nrxgroups_order;
 	pip_aa.aa_ip_offset = sc->sc_ip_offset;
 	cn30xxpip_init(&pip_aa, &sc->sc_pip);
 	cn30xxpip_port_config(sc->sc_pip);
@@ -1076,7 +1130,7 @@ cnmac_stop(struct ifnet *ifp, int disable)
 
 	cn30xxgmx_port_enable(sc->sc_gmx_port, 0);
 
-	intr_barrier(sc->sc_ih);
+	cnmac_rx_groups_barrier();
 	ifq_barrier(&ifp->if_snd);
 
 	ifq_clr_oactive(&ifp->if_snd);
@@ -1108,7 +1162,7 @@ cnmac_configure(struct cnmac_softc *sc)
 
 	cn30xxpko_port_config(sc->sc_pko);
 	cn30xxpko_port_enable(sc->sc_pko, 1);
-	cn30xxpow_config(sc->sc_pow, sc->sc_powgroup);
+	cnmac_rx_groups_config(sc->sc_pow);
 
 	cn30xxgmx_port_enable(sc->sc_gmx_port, 1);
 
@@ -1262,9 +1316,10 @@ cnmac_recv(struct cnmac_softc *sc, uint64_t *work, struct mbuf_list *ml)
 {
 	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
 	struct mbuf *m;
-	uint64_t word2;
+	uint64_t word1, word2;
 	int nmbuf = 0;
 
+	word1 = work[1];
 	word2 = work[2];
 
 	if (!(ifp->if_flags & IFF_RUNNING))
@@ -1282,6 +1337,8 @@ cnmac_recv(struct cnmac_softc *sc, uint64_t *work, struct mbuf_list *ml)
 	}
 
 	m->m_pkthdr.csum_flags = 0;
+	m->m_pkthdr.ph_flowid = word1 & PIP_WQE_WORD1_TAG;
+	SET(m->m_pkthdr.csum_flags, M_FLOWID);
 	if (__predict_true(!ISSET(word2, PIP_WQE_WORD2_IP_NI))) {
 		/* Check IP checksum status. */
 		if (!ISSET(word2, PIP_WQE_WORD2_IP_V6) &&
@@ -1322,16 +1379,20 @@ drop:
 int
 cnmac_intr(void *arg)
 {
-	struct mbuf_list ml = MBUF_LIST_INITIALIZER();
-	struct cnmac_softc *sc = arg;
-	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
+	struct cnmac_rx_group *crg = arg;
+	struct cn30xxpow_softc *pow = &cn30xxpow_softc;
+	struct cnmac_softc *sc;
+	struct ifnet *ifp;
+	struct mbuf_list *ml;
 	uint64_t *work;
-	uint64_t wqmask = 1ull << sc->sc_powgroup;
+	uint64_t pending = 0;
+	uint64_t wqmask = 1ull << crg->crg_group;
 	uint32_t coreid = octeon_get_coreid();
-	uint32_t port;
+	unsigned int port;
+	unsigned int i;
 	int nmbuf = 0;
 
-	_POW_WR8(sc->sc_pow, POW_PP_GRP_MSK_OFFSET(coreid), wqmask);
+	_POW_WR8(pow, POW_PP_GRP_MSK_OFFSET(coreid), wqmask);
 
 	cn30xxpow_tag_sw_wait();
 	cn30xxpow_work_request_async(OCTEON_CVMSEG_OFFSET(csm_pow_intr),
@@ -1348,18 +1409,30 @@ cnmac_intr(void *arg)
 		    OCTEON_CVMSEG_OFFSET(csm_pow_intr), POW_NO_WAIT);
 
 		port = (work[1] & PIP_WQE_WORD1_IPRT) >> 42;
-		if (port != sc->sc_port) {
-			printf("%s: unexpected wqe port %u, should be %u\n",
-			    sc->sc_dev.dv_xname, port, sc->sc_port);
+		if (port >= nitems(cnmac_port_softc) ||
+		    (sc = cnmac_port_softc[port]) == NULL) {
+			printf("%s: unexpected wqe port %u\n",
+			    crg->crg_name, port);
 			goto wqe_error;
 		}
 
-		nmbuf += cnmac_recv(sc, work, &ml);
+		if ((pending & (1ULL << port)) == 0) {
+			ml_init(&crg->crg_rx_batch[port]);
+			pending |= 1ULL << port;
+		}
+		nmbuf += cnmac_recv(sc, work, &crg->crg_rx_batch[port]);
 	}
 
-	_POW_WR8(sc->sc_pow, POW_WQ_INT_OFFSET, wqmask);
+	_POW_WR8(pow, POW_WQ_INT_OFFSET, wqmask);
 
-	if_input(ifp, &ml);
+	while (pending) {
+		i = __builtin_ffsll(pending) - 1;
+		sc = cnmac_port_softc[i];
+		ifp = &sc->sc_arpcom.ac_if;
+		ml = &crg->crg_rx_batch[i];
+		ifiq_input(ifp->if_iqs[crg->crg_group], ml);
+		pending &= pending - 1;
+	}
 
 	nmbuf = cnmac_mbuf_alloc(nmbuf);
 	if (nmbuf != 0)

@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_cnmacvar.h,v 1.20 2022/12/28 01:39:21 yasuoka Exp $	*/
+/*	$OpenBSD: if_cnmacvar.h,v 1.21 2026/04/27 16:54:49 kirill Exp $	*/
 
 /*
  * Copyright (c) 2007 Internet Initiative Japan, Inc.
@@ -63,7 +63,6 @@ struct cnmac_softc {
 
 	bus_dmamap_t		sc_dmap;
 
-	void			*sc_ih;
 	struct cn30xxpip_softc	*sc_pip;
 	struct cn30xxipd_softc	*sc_ipd;
 	struct cn30xxpko_softc	*sc_pko;
@@ -92,7 +91,6 @@ struct cnmac_softc {
 	uint32_t		sc_port_type;
 	uint32_t		sc_init_flag;
 	int			sc_phy_addr;
-	int			sc_powgroup;
 
 	/*
 	 * Redirection - received (input) packets are redirected (directly sent)
