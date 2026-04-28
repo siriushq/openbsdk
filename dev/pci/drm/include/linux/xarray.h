@@ -38,11 +38,7 @@ struct xarray {
 	}
 
 #define DEFINE_XARRAY_ALLOC(name)				\
-	struct xarray name = {					\
-		.xa_flags = XA_FLAGS_ALLOC,			\
-		.xa_lock = MUTEX_INITIALIZER(IPL_NONE),		\
-		.xa_tree = SPLAY_INITIALIZER(&name.xa_tree)	\
-	}
+	DEFINE_XARRAY_FLAGS(name, XA_FLAGS_ALLOC)
 
 struct xarray_range {
 	uint32_t start;
