@@ -1,4 +1,4 @@
-/*	$OpenBSD: drm_linux.c,v 1.136 2026/04/28 01:14:07 jsg Exp $	*/
+/*	$OpenBSD: drm_linux.c,v 1.137 2026/04/28 03:44:14 jsg Exp $	*/
 /*
  * Copyright (c) 2013 Jonathan Gray <jsg@openbsd.org>
  * Copyright (c) 2015, 2016 Mark Kettenis <kettenis@openbsd.org>
@@ -2979,7 +2979,7 @@ drm_linux_init(void)
 
 	pool_init(&idr_pool, sizeof(struct idr_entry), 0, IPL_TTY, 0,
 	    "idrpl", NULL);
-	pool_init(&xa_pool, sizeof(struct xarray_entry), 0, IPL_NONE, 0,
+	pool_init(&xa_pool, sizeof(struct xarray_entry), 0, IPL_TTY, 0,
 	    "xapl", NULL);
 
 	kmap_atomic_va =
