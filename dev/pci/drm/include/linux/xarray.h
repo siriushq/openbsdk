@@ -29,6 +29,14 @@ struct xarray {
 	SPLAY_HEAD(xarray_tree, xarray_entry) xa_tree;
 };
 
+#define DEFINE_XARRAY_FLAGS(name, flags)			\
+	struct xarray name = {					\
+		.xa_flags = flags,				\
+		.xa_lock = MUTEX_INITIALIZER((flags & XA_FLAGS_LOCK_IRQ) ? \
+		    IPL_TTY : IPL_NONE),			\
+		.xa_tree = SPLAY_INITIALIZER(&name.xa_tree)	\
+	}
+
 #define DEFINE_XARRAY_ALLOC(name)				\
 	struct xarray name = {					\
 		.xa_flags = XA_FLAGS_ALLOC,			\
