@@ -2324,9 +2324,10 @@ inteldrm_attach(struct device *parent, struct device *self, void *aux)
 
 	/*
 	 * with GuC submission, init sometimes fails on Alder Lake-P
-	 * too early for IS_ALDERLAKE_P
+	 * and Raptor Lake-S, too early for IS_ALDERLAKE
 	 */
-	if (info->platform == INTEL_ALDERLAKE_P)
+	if (info->platform == INTEL_ALDERLAKE_P ||
+	    info->platform == INTEL_ALDERLAKE_S)
 		dev_priv->params.enable_guc = ENABLE_GUC_LOAD_HUC;
 
 	mmio_bar = (GRAPHICS_VER(dev_priv) == 2) ? 0x14 : 0x10;
