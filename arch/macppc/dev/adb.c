@@ -1,4 +1,4 @@
-/*	$OpenBSD: adb.c,v 1.52 2024/04/14 03:26:25 jsg Exp $	*/
+/*	$OpenBSD: adb.c,v 1.53 2026/10/10 19:03:57 miod Exp $	*/
 /*	$NetBSD: adb.c,v 1.6 1999/08/16 06:28:09 tsubai Exp $	*/
 /*	$NetBSD: adb_direct.c,v 1.14 2000/06/08 22:10:45 tsubai Exp $	*/
 
@@ -1417,6 +1417,9 @@ set_adb_info(ADBSetInfoBlock * info, int adbAddr)
 
 }
 
+/* Number of seconds between 19040101 and 19700101 */
+#define DIFF19041970 2082844800
+
 /* caller should really use machine-independent version: getPramTime */
 /* this version does pseudo-adb access only */
 int
@@ -1430,7 +1433,7 @@ adb_read_date_time(time_t *time)
 
 	switch (adbHardware) {
 	case ADB_HW_PMU:
-		pm_read_date_time(time);
+		pm_read_date_time(&t);
 		retcode = 0;
 		break;
 
@@ -1450,7 +1453,6 @@ adb_read_date_time(time_t *time)
 
 		delay(20); /* completion occurs too soon? */
 		memcpy(&t, output + 1, sizeof(t));
-		*time = (time_t)t;
 		retcode = 0;
 		break;
 
@@ -1460,9 +1462,16 @@ adb_read_date_time(time_t *time)
 		break;
 	}
 	if (retcode == 0) {
-#define DIFF19041970 2082844800
+		/*
+		 * The value we've obtained is a 32-bit value of the number
+		 * of seconds since 1904. It will wrap on 20400206.
+		 * Since this hardware did not exist until the late 1990s,
+		 * assume negative values are beyond 2040.
+		 */
+		*time = (time_t)t;
+		if (t < DIFF19041970)
+			*time += 1ULL << 32;
 		*time -= DIFF19041970;
-
 	} else {
 		*time = 0;
 	}
@@ -1483,7 +1492,7 @@ adb_set_date_time(time_t time)
 	switch (adbHardware) {
 
 	case ADB_HW_CUDA:
-		t = time;		/* XXX eventually truncates */
+		t = time;		/* truncates */
 
 		output[0] = 0x06;	/* 6 byte message */
 		output[1] = 0x01;	/* to pram/rtc device */

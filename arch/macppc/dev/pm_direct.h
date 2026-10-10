@@ -1,4 +1,4 @@
-/*	$OpenBSD: pm_direct.h,v 1.17 2024/10/22 21:50:02 jsg Exp $	*/
+/*	$OpenBSD: pm_direct.h,v 1.18 2026/10/10 19:03:57 miod Exp $	*/
 /*	$NetBSD: pm_direct.h,v 1.7 2005/01/07 04:59:58 briggs Exp $	*/
 
 /*
@@ -54,8 +54,8 @@ int	pm_adb_op(u_char *, void *, void *, int);
 void	pm_adb_restart(void);
 void	pm_adb_poweroff(void);
 void	pm_intr(void);
-void	pm_read_date_time(time_t *);
-void	pm_set_date_time(time_t);
+void	pm_read_date_time(uint32_t *);
+void	pm_set_date_time(uint32_t);
 
 struct pmu_battery_info {
 	unsigned int flags;

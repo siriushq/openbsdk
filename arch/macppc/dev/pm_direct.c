@@ -1,4 +1,4 @@
-/*	$OpenBSD: pm_direct.c,v 1.35 2023/11/22 18:14:35 tobhe Exp $	*/
+/*	$OpenBSD: pm_direct.c,v 1.36 2026/10/10 19:03:57 miod Exp $	*/
 /*	$NetBSD: pm_direct.c,v 1.9 2000/06/08 22:10:46 tsubai Exp $	*/
 
 /*
@@ -738,10 +738,9 @@ pm_adb_poweroff(void)
 }
 
 void
-pm_read_date_time(time_t *time)
+pm_read_date_time(uint32_t *time)
 {
 	PMData p;
-	u_int32_t t;
 
 	p.command = PMU_READ_RTC;
 	p.num_data = 0;
@@ -749,20 +748,18 @@ pm_read_date_time(time_t *time)
 	p.r_buf = p.data;
 	pmgrop(&p);
 
-	bcopy(p.data, &t, sizeof(t));
-	*time = (time_t)t;
+	bcopy(p.data, time, sizeof(*time));
 }
 
 void
-pm_set_date_time(time_t time)
+pm_set_date_time(uint32_t time)
 {
 	PMData p;
-	u_int32_t t = time;		/* XXX eventually truncates */
 
 	p.command = PMU_SET_RTC;
-	p.num_data = sizeof(t);
+	p.num_data = sizeof(time);
 	p.s_buf = p.r_buf = p.data;
-	bcopy(&t, p.data, sizeof(t));
+	bcopy(&time, p.data, sizeof(time));
 	pmgrop(&p);
 }
 
