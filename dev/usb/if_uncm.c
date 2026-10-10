@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_uncm.c,v 1.1 2026/10/06 12:31:56 stsp Exp $ */
+/*	$OpenBSD: if_uncm.c,v 1.2 2026/10/10 14:43:45 deraadt Exp $ */
 
 /*
  * Copyright (c) 2016 genua mbH
@@ -108,6 +108,13 @@ struct uncm_softc {
 
 #define UNCM_RX_NTB_MAX		16384
 
+#define UNCM_NTB16_MINSZ	(sizeof(struct ncm_header16) +	\
+				 sizeof(struct ncm_pointer16) +	\
+				 sizeof(struct ncm_pointer16_dgram))
+#define UNCM_NTB32_MINSZ	(sizeof(struct ncm_header32) +	\
+				 sizeof(struct ncm_pointer32) +	\
+				 sizeof(struct ncm_pointer32_dgram))
+
 int		 uncm_match(struct device *, void *, void *);
 void		 uncm_attach(struct device *, struct device *, void *);
 int		 uncm_detach(struct device *, int);
@@ -192,16 +199,17 @@ uncm_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_ctrl_ifaceno = uaa->ifaceno;
 	sc->sc_maxpktlen = ETHER_MAX_LEN - ETHER_CRC_LEN;
 	sc->sc_link = LINK_STATE_UNKNOWN;
+
 	ml_init(&sc->sc_tx_ml);
 	usb_init_task(&sc->sc_link_task, uncm_link_task, sc,
 	    USB_TASK_TYPE_GENERIC);
+
 	usbd_desc_iter_init(sc->sc_udev, &iter);
 	while ((desc = usbd_desc_iter_next(&iter))) {
 		if (desc->bDescriptorType == UDESC_IFACE_ASSOC) {
 			ad = (usb_interface_assoc_descriptor_t *)desc;
 			if (ad->bFirstInterface == uaa->ifaceno &&
 			    ad->bInterfaceCount > 1) {
-				/* Fall back to the interface following control. */
 				data_ifaceno = uaa->ifaceno + 1;
 			}
 			continue;
@@ -245,6 +253,7 @@ uncm_attach(struct device *parent, struct device *self, void *aux)
 			break;
 		}
 	}
+
 	if (data_ifaceno == -1) {
 		printf("%s: no data interface number\n", DEVNAM(sc));
 		goto fail;
@@ -260,6 +269,7 @@ uncm_attach(struct device *parent, struct device *self, void *aux)
 			usbd_claim_iface(sc->sc_udev, i);
 		}
 	}
+
 	if (sc->sc_data_iface == NULL) {
 		printf("%s: no data interface found\n", DEVNAM(sc));
 		goto fail;
@@ -275,6 +285,7 @@ uncm_attach(struct device *parent, struct device *self, void *aux)
 		    UE_GET_DIR(ed->bEndpointAddress) == UE_DIR_IN)
 			ctrl_ep = ed->bEndpointAddress;
 	}
+
 	if (ctrl_ep == -1) {
 		printf("%s: missing interrupt endpoint\n", DEVNAM(sc));
 		goto fail;
@@ -316,6 +327,7 @@ uncm_attach(struct device *parent, struct device *self, void *aux)
 		    UE_GET_DIR(ed->bEndpointAddress) == UE_DIR_OUT)
 			sc->sc_tx_ep = ed->bEndpointAddress;
 	}
+
 	if (sc->sc_rx_ep == -1 || sc->sc_tx_ep == -1) {
 		printf("%s: missing bulk endpoints\n", DEVNAM(sc));
 		goto fail;
@@ -438,12 +450,14 @@ uncm_ntb_setup(struct uncm_softc *sc)
 {
 	usb_device_request_t req;
 	struct ncm_ntb_parameters np;
+	int	toosmall = 0;
 
 	req.bmRequestType = UT_READ_CLASS_INTERFACE;
 	req.bRequest = NCM_GET_NTB_PARAMETERS;
 	USETW(req.wValue, 0);
 	USETW(req.wIndex, sc->sc_ctrl_ifaceno);
 	USETW(req.wLength, sizeof(np));
+
 	if (usbd_do_request(sc->sc_udev, &req, &np) == USBD_NORMAL_COMPLETION &&
 	    UGETW(np.wLength) == sizeof(np)) {
 		sc->sc_rx_bufsz = MIN(UGETDW(np.dwNtbInMaxSize), UINT16_MAX);
@@ -476,19 +490,17 @@ uncm_ntb_setup(struct uncm_softc *sc)
 		sc->sc_ncm_supported_formats = NCM_FORMAT_NTB16_MASK;
 	}
 
-	if (sc->sc_rx_bufsz < sizeof(struct ncm_header16) +
-	    sizeof(struct ncm_pointer16) +
-	    sizeof(struct ncm_pointer16_dgram) ||
-	    sc->sc_tx_bufsz < sizeof(struct ncm_header16) +
-	    sizeof(struct ncm_pointer16) +
-	    sizeof(struct ncm_pointer16_dgram) ||
-	    ((sc->sc_ncm_supported_formats & NCM_FORMAT_NTB32_MASK) &&
-	    (sc->sc_rx_bufsz < sizeof(struct ncm_header32) +
-	    sizeof(struct ncm_pointer32) +
-	    sizeof(struct ncm_pointer32_dgram) ||
-	    sc->sc_tx_bufsz < sizeof(struct ncm_header32) +
-	    sizeof(struct ncm_pointer32) +
-	    sizeof(struct ncm_pointer32_dgram)))) {
+	if (sc->sc_rx_bufsz < UNCM_NTB16_MINSZ ||
+	    sc->sc_tx_bufsz < UNCM_NTB16_MINSZ)
+		toosmall = 1;
+
+	if (sc->sc_ncm_supported_formats & NCM_FORMAT_NTB32_MASK) {
+		if (sc->sc_rx_bufsz < UNCM_NTB32_MINSZ ||
+		    sc->sc_tx_bufsz < UNCM_NTB32_MINSZ)
+			toosmall = 1;
+	}
+
+	if (toosmall) {
 		DPRINTF("%s: invalid NTB size %d/%d\n", DEVNAM(sc),
 		    sc->sc_rx_bufsz, sc->sc_tx_bufsz);
 		sc->sc_ncm_supported_formats = 0;
@@ -549,6 +561,7 @@ uncm_ntb_setup_input_size(struct uncm_softc *sc)
 	USETW(req.wValue, 0);
 	USETW(req.wIndex, sc->sc_ctrl_ifaceno);
 	USETW(req.wLength, sizeof(dwSize));
+
 	if (usbd_do_request(sc->sc_udev, &req, dwSize) ==
 	    USBD_NORMAL_COMPLETION)
 		sc->sc_rx_bufsz = UNCM_RX_NTB_MAX;
@@ -566,11 +579,11 @@ uncm_alloc_xfers(struct uncm_softc *sc)
 			    sc->sc_rx_bufsz);
 	}
 
-    if (sc->sc_tx_xfer == NULL) {
+	if (sc->sc_tx_xfer == NULL) {
 		if ((sc->sc_tx_xfer = usbd_alloc_xfer(sc->sc_udev)) != NULL)
 			sc->sc_tx_buf = usbd_alloc_buffer(sc->sc_tx_xfer,
 			    sc->sc_tx_bufsz);
-    }
+	}
 
 	return (sc->sc_rx_buf != NULL && sc->sc_tx_buf != NULL);
 }
@@ -584,13 +597,13 @@ uncm_free_xfers(struct uncm_softc *sc)
 		sc->sc_rx_buf = NULL;
 	}
 
-    if (sc->sc_tx_xfer != NULL) {
+	if (sc->sc_tx_xfer != NULL) {
 		usbd_free_xfer(sc->sc_tx_xfer);
 		sc->sc_tx_xfer = NULL;
 		sc->sc_tx_buf = NULL;
 	}
 
-    ml_purge(&sc->sc_tx_ml);
+	ml_purge(&sc->sc_tx_ml);
 }
 
 void
@@ -713,6 +726,7 @@ uncm_padding(void *buf, size_t bufsz, int offs, int alignment, int remainder)
 	nb = uncm_align(bufsz, offs, alignment, remainder);
 	if (nb > 0)
 		memset(buf + offs, 0, nb);
+
 	return nb;
 }
 
@@ -757,7 +771,7 @@ uncm_start(struct ifnet *ifp)
 		if (m == NULL)
 			break;
 
-		mlen = maxoverhead +  m->m_pkthdr.len;
+		mlen = maxoverhead + m->m_pkthdr.len;
 		if ((sc->sc_maxdgram != 0 && ndgram >= sc->sc_maxdgram) ||
 		    (offs + len + mlen > sc->sc_tx_bufsz)) {
 			ifq_deq_rollback(&ifp->if_snd, m);
@@ -852,7 +866,7 @@ uncm_encap(struct uncm_softc *sc, int ndgram)
 	int	 offs = 0, plen = 0;
 	int	 dgoffs = 0, poffs;
 	struct mbuf *m;
-	usbd_status  err;
+	usbd_status err;
 
 	KASSERT(sc->sc_ncm_format == NCM_FORMAT_NTB16 ||
 	    sc->sc_ncm_format == NCM_FORMAT_NTB32);
@@ -1051,9 +1065,11 @@ uncm_decap(struct uncm_softc *sc, struct usbd_xfer *xfer)
 
 	if ((uint64_t)len < ptroff + sizeof(*ptr16))
 		goto toosmall;
+
 	ptr16 = (struct ncm_pointer16 *)(buf + ptroff);
 	psig = UGETDW(ptr16->dwSignature);
 	ptrlen = UGETW(ptr16->wLength);
+
 	if ((uint64_t)len < (uint64_t)ptrlen + ptroff)
 		goto toosmall;
 
@@ -1152,18 +1168,23 @@ uncm_intr(struct usbd_xfer *xfer, void *priv, usbd_status status)
 		return;
 
 	if (status != USBD_NORMAL_COMPLETION) {
+		if (status == USBD_NOT_STARTED || status == USBD_CANCELLED)
+			return;
 		DPRINTF("%s: notification error: %s\n", DEVNAM(sc),
 		    usbd_errstr(status));
 		if (status == USBD_STALLED)
 			usbd_clear_endpoint_stall_async(sc->sc_ctrl_pipe);
 		return;
 	}
+
 	usbd_get_xfer_status(xfer, NULL, NULL, &total_len, NULL);
+
 	if (total_len < UCDC_NOTIFICATION_LENGTH) {
 		DPRINTF("%s: short notification (%d<%d)\n", DEVNAM(sc),
 		    total_len, UCDC_NOTIFICATION_LENGTH);
 		return;
 	}
+
 	if (sc->sc_intr_msg.bmRequestType != UCDC_NOTIFICATION) {
 		DPRINTF("%s: unexpected notification (type=0x%02x)\n",
 		    DEVNAM(sc), sc->sc_intr_msg.bmRequestType);
@@ -1213,7 +1234,8 @@ uncm_link_task(void *arg)
 		if (ifp->if_flags & IFF_DEBUG)
 			log(LOG_DEBUG, "%s: link state changed from %s to %s\n",
 			    DEVNAM(sc),
-			    LINK_STATE_IS_UP(ifp->if_link_state) ? "up" : "down",
+			    LINK_STATE_IS_UP(ifp->if_link_state) ?
+			    "up" : "down",
 			    LINK_STATE_IS_UP(sc->sc_link) ? "up" : "down");
 		ifp->if_link_state = sc->sc_link;
 		if_link_state_change(ifp);
@@ -1223,4 +1245,3 @@ uncm_link_task(void *arg)
 	}
 	splx(s);
 }
-
